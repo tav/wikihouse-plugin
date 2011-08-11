@@ -50,7 +50,7 @@ else
   WIKIHOUSE_SAVE = get_documents_directory ENV['HOME'], 'Documents'
 end
 
-WIKIHOUSE_DEV = true
+WIKIHOUSE_DEV = false
 
 if WIKIHOUSE_DEV
   WIKIHOUSE_SERVER = "http://localhost:8080"
@@ -436,7 +436,6 @@ def load_wikihouse_upload
 
   # Instantiate an upload web dialog.
   dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, WIKIHOUSE_TITLE, 720, 640, 150, 150, true
-  dialog.set_url WIKIHOUSE_UPLOAD_URL
 
   # Load default values into the upload form.
   dialog.add_action_callback "load" do |dialog, params|
@@ -580,6 +579,7 @@ def load_wikihouse_upload
     end
   end
 
+  dialog.set_url WIKIHOUSE_UPLOAD_URL
   dialog.show
 
 end
