@@ -296,31 +296,27 @@ def load_wikihouse_download
     return
   end
 
-  if WIKIHOUSE_VIRGIN_DOWNLOAD_DIALOG or WIKIHOUSE_DEV
+  dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, WIKIHOUSE_TITLE, 720, 640, 150, 150, true
 
-    $WIKIHOUSE_VIRGIN_DOWNLOAD_DIALOG = false
+  dialog.add_action_callback "init" do |dialog, id|
+    init_wikihouse_dialog dialog, id
+  end
 
-    WIKIHOUSE_DOWNLOAD_DIALOG.add_action_callback "init" do |dialog, id|
-      init_wikihouse_dialog dialog, id
-    end
+  dialog.add_action_callback "download" do |dialog, params|
+    wikihouse_download_callback dialog, params
+  end
 
-    WIKIHOUSE_DOWNLOAD_DIALOG.add_action_callback "download" do |dialog, params|
-      wikihouse_download_callback dialog, params
-    end
+  dialog.add_action_callback "save" do |dialog, download_id|
+    wikihouse_save_callback dialog, download_id
+  end
 
-    WIKIHOUSE_DOWNLOAD_DIALOG.add_action_callback "save" do |dialog, download_id|
-      wikihouse_save_callback dialog, download_id
-    end
-
-    WIKIHOUSE_DOWNLOAD_DIALOG.add_action_callback "error" do |dialog, download_id|
-      wikihouse_error_callback dialog, download_id
-    end
-
+  dialog.add_action_callback "error" do |dialog, download_id|
+    wikihouse_error_callback dialog, download_id
   end
 
   # Set the dialog's url and display it.
-  WIKIHOUSE_DOWNLOAD_DIALOG.set_url WIKIHOUSE_DOWNLOAD_URL
-  WIKIHOUSE_DOWNLOAD_DIALOG.bring_to_front
+  dialog.set_url WIKIHOUSE_DOWNLOAD_URL
+  dialog.bring_to_front
 
 end
 
@@ -594,12 +590,8 @@ if not file_loaded? __FILE__
   WIKIHOUSE_DOWNLOADS = Hash.new
   WIKIHOUSE_UPLOADS = Hash.new
 
+  # Initialise the downloads counter.
   $WIKIHOUSE_DOWNLOADS_ID = 0
-
-  # Initialise web dialogs.
-  WIKIHOUSE_DOWNLOAD_DIALOG = UI::WebDialog.new WIKIHOUSE_TITLE, true, WIKIHOUSE_TITLE, 720, 640, 150, 150, true
-
-  WIKIHOUSE_VIRGIN_DOWNLOAD_DIALOG = true
 
   # Initialise the core commands.
   WIKIHOUSE_DOWNLOAD = UI::Command.new("Get Models...") do
