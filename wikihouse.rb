@@ -229,8 +229,6 @@ end
 
 def wikihouse_save_callback(dialog, download_id)
 
-  UI.messagebox "|" + download_id + "|"
-
   errmsg = "Couldn't find the #{WIKIHOUSE_TITLE} model data to save"
 
   # Exit if the save parameters weren't set.
