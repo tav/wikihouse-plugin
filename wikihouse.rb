@@ -12,7 +12,7 @@ require 'sketchup.rb'
 # ------------------------------------------------------------------------------
 
 def get_documents_directory(home, docs)
-  dir = File.join(home, docs)
+  dir = File.join home, docs
   if not (File.directory?(dir) and File.writable?(dir))
     home
   else
@@ -28,7 +28,7 @@ def get_temp_directory
 	  break
 	end
   end
-  File.expand_path(temp)
+  File.expand_path temp
 end
 
 # ------------------------------------------------------------------------------
@@ -43,10 +43,10 @@ REPLY_RETRY = 4
 REPLY_YES = 6
 
 if RUBY_PLATFORM =~ /mswin/
-  WIKIHOUSE_CONF_FILE = File.join(ENV['APPDATA'], 'WikiHouse.conf')
+  WIKIHOUSE_CONF_FILE = File.join ENV['APPDATA'], 'WikiHouse.conf'
   WIKIHOUSE_SAVE = get_documents_directory ENV['USERPROFILE'], 'Documents'
 else
-  WIKIHOUSE_CONF_FILE = File.join(ENV['HOME'], '.wikihouse.conf')
+  WIKIHOUSE_CONF_FILE = File.join ENV['HOME'], '.wikihouse.conf'
   WIKIHOUSE_SAVE = get_documents_directory ENV['HOME'], 'Documents'
 end
 
@@ -58,11 +58,13 @@ else
   WIKIHOUSE_SERVER = "https://wikihouse-cc.appspot.com"
 end
 
-WIKIHOUSE_DOWNLOAD_PATH = "/library"
-WIKIHOUSE_UPLOAD_PATH = "/library/add_design"
+WIKIHOUSE_DOWNLOAD_PATH = "/library?sketchup=true"
+WIKIHOUSE_UPLOAD_PATH = "/library/add_design?sketchup=true"
 WIKIHOUSE_DOWNLOAD_URL = WIKIHOUSE_SERVER + WIKIHOUSE_DOWNLOAD_PATH
 WIKIHOUSE_UPLOAD_URL = WIKIHOUSE_SERVER + WIKIHOUSE_UPLOAD_PATH
 
+WIKIHOUSE_PLUGIN_VERSION = "0.1"
+WIKIHOUSE_SPEC = "0.1"
 WIKIHOUSE_TEMP = get_temp_directory
 WIKIHOUSE_TITLE = "WikiHouse"
 
@@ -71,7 +73,7 @@ WIKIHOUSE_TITLE = "WikiHouse"
 # ------------------------------------------------------------------------------
 
 def get_wikihouse_thumbnail(model, view, suffix)
-  filename = File.join(WIKIHOUSE_TEMP, "#{model.guid}-#{suffix}.png")
+  filename = File.join WIKIHOUSE_TEMP, "#{model.guid}-#{suffix}.png"
   opts = {
     :antialias => true,
     :compression => 0.8,
@@ -118,15 +120,15 @@ class WikiHouseLoader
 
   def onFailure(error)
     @error = error
-    Sketchup.set_status_text('')
+    Sketchup.set_status_text ''
   end
 
   def onPercentChange(p)
-    Sketchup.set_status_text("LOADING #{name}:    #{p.to_i}%")
+    Sketchup.set_status_text "LOADING #{name}:    #{p.to_i}%"
   end
 
   def onSuccess
-    Sketchup.set_status_text('')
+    Sketchup.set_status_text ''
   end
 
 end
@@ -158,14 +160,6 @@ end
 
 def make_wikihouse(model)
   ""
-end
-
-# ------------------------------------------------------------------------------
-# WebDialog Support
-# ------------------------------------------------------------------------------
-
-def init_wikihouse_dialog(dialog, id)
-  dialog.execute_script "try { wikihouse.init('#{id}'); } catch (err) {}"
 end
 
 # ------------------------------------------------------------------------------
@@ -262,7 +256,7 @@ def wikihouse_save_callback(dialog, download_id)
 
   # Save the data to the local file.
   File.open(filename, 'wb') do |io|
-    io.write(data)
+    io.write data
   end
 
   UI.messagebox "Successfully saved #{WIKIHOUSE_TITLE} model to #{filename}"
@@ -295,10 +289,6 @@ def load_wikihouse_download
   end
 
   dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, WIKIHOUSE_TITLE, 720, 640, 150, 150, true
-
-  dialog.add_action_callback "init" do |dialog, id|
-    init_wikihouse_dialog dialog, id
-  end
 
   dialog.add_action_callback "download" do |dialog, params|
     wikihouse_download_callback dialog, params
@@ -335,7 +325,7 @@ def load_wikihouse_make
   # Initialise an attribute dictionary for custom metadata.
   attr = model.attribute_dictionary WIKIHOUSE_TITLE, true
   if attr.size == 0
-    attr["spec"] = "0.1"
+    attr["spec"] = WIKIHOUSE_SPEC
   end
 
   # Exit if it's an unsaved model.
@@ -374,7 +364,7 @@ def load_wikihouse_make
 
   # Save the data to the file.
   File.open(filename, "wb") do |io|
-    io.write(data)
+    io.write data
   end
 
   UI.messagebox "Fabricated sheets successfully saved to #{filename}"
@@ -442,6 +432,7 @@ def load_wikihouse_upload
     if Sketchup.version
       set_dom_value dialog, "design-sketchup-version", Sketchup.version
     end
+    set_dom_value dialog, "design-plugin-version", WIKIHOUSE_PLUGIN_VERSION
   end
 
   # Process and prepare the model related data for upload.
@@ -546,10 +537,6 @@ def load_wikihouse_upload
     dialog.bring_to_front
   end
 
-  dialog.add_action_callback "init" do |dialog, id|
-    init_wikihouse_dialog dialog, id
-  end
-
   dialog.add_action_callback "download" do |dialog, params|
     wikihouse_download_callback dialog, params
   end
@@ -592,7 +579,7 @@ if not file_loaded? __FILE__
   $WIKIHOUSE_DOWNLOADS_ID = 0
 
   # Initialise the core commands.
-  WIKIHOUSE_DOWNLOAD = UI::Command.new("Get Models...") do
+  WIKIHOUSE_DOWNLOAD = UI::Command.new "Get Models..." do
     load_wikihouse_download
   end
 
@@ -604,7 +591,7 @@ if not file_loaded? __FILE__
     MF_ENABLED|MF_CHECKED
   }
 
-  WIKIHOUSE_MAKE = UI::Command.new("Make This House...") do
+  WIKIHOUSE_MAKE = UI::Command.new "Make This House..." do
     load_wikihouse_make
   end
 
@@ -617,7 +604,7 @@ if not file_loaded? __FILE__
     end
   }
 
-  WIKIHOUSE_UPLOAD = UI::Command.new("Share Model...") do
+  WIKIHOUSE_UPLOAD = UI::Command.new "Share Model..." do
     load_wikihouse_upload
   end
 
@@ -638,13 +625,13 @@ if not file_loaded? __FILE__
   WIKIHOUSE_TOOLBAR.show
 
   # Register a new submenu of the standard Plugins menu with the commands.
-  WIKIHOUSE_MENU = UI.menu("Plugins").add_submenu(WIKIHOUSE_TITLE)
+  WIKIHOUSE_MENU = UI.menu("Plugins").add_submenu WIKIHOUSE_TITLE
   WIKIHOUSE_MENU.add_item WIKIHOUSE_DOWNLOAD
   WIKIHOUSE_MENU.add_item WIKIHOUSE_UPLOAD
   WIKIHOUSE_MENU.add_item WIKIHOUSE_MAKE
 
   # Add our custom AppObserver.
-  Sketchup.add_observer(WikiHouseAppObserver.new)
+  Sketchup.add_observer WikiHouseAppObserver.new
 
   # Display the Ruby Console in dev mode.
   if WIKIHOUSE_DEV
