@@ -58,8 +58,8 @@ else
   WIKIHOUSE_SERVER = "https://wikihouse-cc.appspot.com"
 end
 
-WIKIHOUSE_DOWNLOAD_PATH = "/library?sketchup=true"
-WIKIHOUSE_UPLOAD_PATH = "/library/add_design?sketchup=true"
+WIKIHOUSE_DOWNLOAD_PATH = "/library/sketchup"
+WIKIHOUSE_UPLOAD_PATH = "/library/add_design/sketchup"
 WIKIHOUSE_DOWNLOAD_URL = WIKIHOUSE_SERVER + WIKIHOUSE_DOWNLOAD_PATH
 WIKIHOUSE_UPLOAD_URL = WIKIHOUSE_SERVER + WIKIHOUSE_UPLOAD_PATH
 
