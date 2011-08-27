@@ -59,7 +59,7 @@ else
 end
 
 WIKIHOUSE_DOWNLOAD_PATH = "/library/sketchup"
-WIKIHOUSE_UPLOAD_PATH = "/library/add_design/sketchup"
+WIKIHOUSE_UPLOAD_PATH = "/library/designs/add/sketchup"
 WIKIHOUSE_DOWNLOAD_URL = WIKIHOUSE_SERVER + WIKIHOUSE_DOWNLOAD_PATH
 WIKIHOUSE_UPLOAD_URL = WIKIHOUSE_SERVER + WIKIHOUSE_UPLOAD_PATH
 
@@ -167,7 +167,12 @@ end
 # ------------------------------------------------------------------------------
 
 def wikihouse_download_callback(dialog, params)
-
+  
+  puts ""
+  puts "*** #{WIKIHOUSE_TITLE} wikihouse_download_callback called ***"
+  puts "*** #{params.split ",", 4} ***"
+  puts ""
+  
   # Exit if the download parameters weren't set.
   if params == ""
     show_wikihouse_error "Couldn't find the #{WIKIHOUSE_TITLE} model name and url"
