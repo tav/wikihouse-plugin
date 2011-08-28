@@ -1023,7 +1023,12 @@ end
 # ------------------------------------------------------------------------------
 
 def wikihouse_download_callback(dialog, params)
-
+  
+  puts ""
+  puts "*** #{WIKIHOUSE_TITLE} wikihouse_download_callback called ***"
+  puts "*** #{params.split ",", 4} ***"
+  puts ""
+  
   # Exit if the download parameters weren't set.
   if params == ""
     show_wikihouse_error "Couldn't find the #{WIKIHOUSE_TITLE} model name and url"
