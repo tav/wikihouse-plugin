@@ -1343,15 +1343,19 @@ def load_wikihouse_upload
   end
 
   # Instantiate an upload web dialog.
-  dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, WIKIHOUSE_TITLE, 720, 640, 150, 150, true
+  dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, "#{WIKIHOUSE_TITLE}-Upload", 720, 640, 150, 150, true
 
   # Load default values into the upload form.
   dialog.add_action_callback "load" do |dialog, params|
     if model_name != ""
-      set_dom_value dialog, "design-title", model_name
+      if dialog.get_element_value("design-title") == ""
+        set_dom_value dialog, "design-title", model_name
+      end
     end
     if model.description != ""
-      set_dom_value dialog, "design-description", model.description
+      if dialog.get_element_value("design-description") == ""
+        set_dom_value dialog, "design-description", model.description
+      end
     end
     if Sketchup.version
       set_dom_value dialog, "design-sketchup-version", Sketchup.version
