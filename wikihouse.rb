@@ -176,6 +176,7 @@ def get_face_center(face)
     # TODO(tav): Read http://www.eecs.berkeley.edu/~wkahan/Triangle.pdf and
     # figure out why this fails on triangles with small angles.
     if top < 0
+      puts "Failed surface area calculation"
       next
     end
 
@@ -330,23 +331,18 @@ end
 # Panel
 # ------------------------------------------------------------------------------
 
-$BOOOOO = false
-
 class WikiHousePanel
 
-  attr_accessor :count, :identifier
+  attr_accessor :count, :error, :identifier
 
-  def initialize(root, face, transform, group_id, face_id, count)
+  def initialize(root, recycle, face, transform, group_id, face_id, count)
 
-    # Initalise the ``identifier`` and ``count`` attributes.
+    # Initalise the ``identifier``, ``error`` and ``count`` attributes.
     @count = count
+    @error = true
     @identifier = "#{group_id}-#{face_id}"
 
-    if $BOOOOO
-      return
-    end
-    # $BOOOOO = true
-
+    # Initialise a variable to hold temporarily generated entities.
     to_delete = []
 
     # Create a new face with the vertices transformed if the transformed areas
@@ -369,6 +365,9 @@ class WikiHousePanel
 
     end
 
+    # Save the total surface area of the face.
+    area = face.area
+
     # Find the normal to the face.
     normal = face.normal
     y_axis = normal.axes[1]
@@ -384,125 +383,175 @@ class WikiHousePanel
       x, y = nil, nil
     end
 
+    # Initialise various container variables.
+    curves = Hash.new
+    curve_info = Hash.new
+    last_curve_id = 0
+    loops, outer = [], []
+    slanted = false
+
+    # Initialise a reference point for transforming slanted faces.
+    base = face.outer_loop.vertices[0].position
+
+    # Loop through the edges -- ensuring that we are traversing them in the
+    # right order.
     face.loops.each do |loop|
-      shown = false
-      loop.edges.each do |edge|
-        if edge.curve and not shown
-          shown = true
-          if edge.curve.is_a? Sketchup::ArcCurve
-            puts "woo!"
-          else
-            puts "boo"
+      if loop.outer?
+        newloop = outer
+      else
+        newloop = []
+        loops << newloop
+      end
+      edgeuse = first = loop.edgeuses[0]
+      virgin = true
+      prev = nil
+      while 1
+        edge = edgeuse.edge
+        if virgin
+          start = edge.start
+          stop = edge.end
+          next_edge = edgeuse.next.edge
+          next_start = next_edge.start
+          next_stop = next_edge.end
+          if (start == next_start) or (start == next_stop)
+            stop, start = start, stop
+          elsif not ((stop == next_start) or (stop == next_stop))
+            puts "Unexpected edge connection"
+            return
           end
-        end
-      end
-    end
-
-    # If so, use the cheap conversion route.
-    if x
-      loops, outer = [], []
-      face.outer_loop.vertices.each do |v|
-        point = v.position.to_a
-        outer << [point[x], point[y], 0]
-      end
-      face.loops.each do |loop|
-        if not loop.outer?
-          newloop = []
-          loops << newloop
-          loop.vertices.each do |v|
-            point = v.position.to_a
-            newloop << [point[x], point[y], 0]
-          end
-        end
-      end
-
-    # Otherwise, handle the case where the face is angled at a slope.
-    else
-
-      outer_vertices = face.outer_loop.vertices
-      base = outer_vertices[0].position
-      loops, outer = [], []
-
-      # Loop through the outer vertices and realign them relative to the origin
-      # and rotate according to the angle to the y-axis to find 2D positions.
-      outer_vertices.each do |v|
-        point = v.position
-        edge = Geom::Vector3d.new(point.x - base.x, point.y - base.y, point.z - base.z)
-        if not edge.valid?
-          outer << [base.x, base.y, 0]
+          virgin = nil
         else
-          if edge.samedirection? y_axis
-            angle = 0
-          elsif edge.parallel? y_axis
-            angle = Math::PI
+          start = edge.start
+          stop = edge.end
+          if stop == prev
+            stop, start = start, stop
+          elsif not start == prev
+            puts "Unexpected edge connection"
+            return
+          end
+        end
+        curve = edge.curve
+        if curve
+          curve_id = curves[curve]
+          if not curve_id
+            curve_id = last_curve_id
+            curves[curve] = curve_id
+            curve_info[curve_id] = [1, curve.center, curve.radius]
+            last_curve_id += 1
           else
-            angle = edge.angle_between y_axis
-            if not edge.cross(y_axis).samedirection? normal
-              angle = -angle
-            end
+            curve_info[curve_id][0] += 1
           end
-          rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, angle
-          newedge = rotate * Geom::Vector3d.new(edge.length, 0, 0)
-          outer << [base.x + newedge.x, base.y + newedge.y, 0]
+        else
+          curve_id = nil
         end
-      end
-
-      # And, likewise for any inner loops.
-      face.loops.each do |loop|
-        if not loop.outer?
-          newloop = []
-          loops << newloop
-          loop.vertices.each do |v|
-            point = v.position
-            edge = Geom::Vector3d.new(point.x - base.x, point.y - base.y, point.z - base.z)
-            if not edge.valid?
-              newloop << [base.x, base.y, 0]
+        if x
+          # If the face is parallel to a base axis, use the cheap conversion
+          # route.
+          point = start.position.to_a
+          newloop << [point[x], point[y], 0]
+        else
+          # Otherwise, handle the case where the face is angled at a slope by
+          # realigning edges relative to the origin and rotating them according
+          # to their angle to the y-axis.
+          point = start.position
+          edge = Geom::Vector3d.new(point.x - base.x, point.y - base.y, point.z - base.z)
+          if not edge.valid?
+            newloop << [base.x, base.y, 0]
+          else
+            if edge.samedirection? y_axis
+              angle = 0
+            elsif edge.parallel? y_axis
+              angle = Math::PI
             else
-              if edge.samedirection? y_axis
-                angle = 0
-              elsif edge.parallel? y_axis
-                angle = Math::PI
-              else
-                angle = edge.angle_between y_axis
-                if not edge.cross(y_axis).samedirection? normal
-                  angle = -angle
-                end
+              angle = edge.angle_between y_axis
+              if not edge.cross(y_axis).samedirection? normal
+                angle = -angle
               end
-              rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, angle
-              newedge = rotate * Geom::Vector3d.new(edge.length, 0, 0)
-              newloop << [base.x + newedge.x, base.y + newedge.y, 0]
             end
+            rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, angle
+            newedge = rotate * Geom::Vector3d.new(edge.length, 0, 0)
+            newloop << [base.x + newedge.x, base.y + newedge.y, 0]
           end
+          slanted = true
         end
+        edgeuse = edgeuse.next
+        if edgeuse == first
+          break
+        end
+        prev = stop
       end
-
     end
+
+    if curves.length > 0
+      if slanted
+        puts "slanted"
+      end
+      puts curve_info.inspect
+    end
+
+    # Go through the various loops and identify potential curves.
+    nloops = [outer]
+    nloops.concat loops
+    nloops.each do |loop|
+      idx = 0
+      prev = nil
+      while 1
+        # Get the next three points on the loop.
+        p1, p2, p3 = loop[idx...idx+3]
+        if not p3
+          break
+        end
+        # Construct the edge vectors.
+        edge1 = Geom::Vector3d.new(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z)
+        edge2 = Geom::Vector3d.new(p3.x - p2.x, p3.y - p2.y, p3.z - p2.z)
+        if edge1.parallel? edge2
+          idx += 1
+          prev = nil
+          next
+        end
+        # Find the perpendicular vectors.
+        cross = edge1.cross edge2
+        vec1 = edge1.cross cross
+        vec2 = edge2.cross cross
+        # Find the midpoints.
+        mid1 = Geom.linear_combination 0.5, p1, 0.5, p2
+        mid2 = Geom.linear_combination 0.5, p2, 0.5, p3
+        # Try finding an intersection.
+        line1 = [mid1, vec1]
+        line2 = [mid2, vec2]
+        intersect = Geom.intersect_line_line line1, line2
+        puts intersect.inspect
+        # If no intersection, try finding one in the other direction.
+        if not intersect
+          vec1.reverse!
+          vec2.reverse!
+          intersect = Geom.intersect_line_line line1, line2
+        end
+        if not intersect
+          idx += 1
+          prev = nil
+          next
+        end
+        # We have an intersection!
+        idx += 1
+        prev = edge1
+      end
+      puts "----"
+    end
+    puts "====="
 
     # Generate the new 2D face.
-
-    group_entity = root.add_group
-    to_delete << group_entity
-    group = group_entity.entities
-    newface = group.add_face outer
-    loops.each do |loop|
-      hole = group.add_face loop
-      hole.erase! if hole.valid?
-    end
-
-    puts newface.loops.length
-
-    newface.loops.each do |loop|
-      shown = false
-      loop.edges.each do |edge|
-        if edge.curve and not shown
-          shown = true
-          if edge.curve.is_a? Sketchup::ArcCurve
-            puts "woo!"
-          else
-            puts "boo"
-          end
-        end
+    if nil
+      group_entity = root.add_group
+      to_delete << group_entity
+      group = group_entity.entities
+      newface = group.add_face outer
+      loops.each do |loop|
+        hole = group.add_face loop
+        hole.erase! if hole.valid?
       end
+      puts face.area
+      puts newface.area
     end
 
     # Find the orientation occupying the minimal bounding rectangle.
@@ -534,6 +583,9 @@ class WikiHouseEntities
     $count_s3 = 0
     $count_s4 = 0
 
+    # Create a group to hold temporary entities.
+    recycle = root.add_group
+
     # Initialise the default attribute values.
     @component_orphans = Hash.new
     @count = count = Hash.new
@@ -543,7 +595,7 @@ class WikiHouseEntities
     @orphan_count = oc = Hash.new
     @orphans = orphans = []
     @root = root
-    @to_delete = []
+    @to_delete = [recycle]
     @todo = todo = []
 
     # Set a loop counter variable and the default identity transformation.
@@ -611,7 +663,7 @@ class WikiHouseEntities
           face_id += 1
           Sketchup.set_status_text WIKIHOUSE_PANEL_STATUS[(loop/10) % 5]
           loop += 1
-          WikiHousePanel.new root, data[0], data[1], "0", face_id, 1
+          WikiHousePanel.new root, recycle, data[0], data[1], "0", face_id, 1
         end
         items.concat panels
       else
@@ -659,7 +711,7 @@ class WikiHouseEntities
             face_id += 1
             Sketchup.set_status_text WIKIHOUSE_PANEL_STATUS[(loop/10) % 5]
             loop += 1
-            WikiHousePanel.new root, data[0], transform, group_str, face_id, panel_count
+            WikiHousePanel.new root, recycle, data[0], transform, group_str, face_id, panel_count
           end
           group_id += 1
           items.concat panels
@@ -1023,11 +1075,6 @@ end
 # ------------------------------------------------------------------------------
 
 def wikihouse_download_callback(dialog, params)
-  
-  puts ""
-  puts "*** #{WIKIHOUSE_TITLE} wikihouse_download_callback called ***"
-  puts "*** #{params.split ",", 4} ***"
-  puts ""
   
   # Exit if the download parameters weren't set.
   if params == ""
@@ -1551,4 +1598,10 @@ if not file_loaded? __FILE__
 
   file_loaded __FILE__
 
+end
+
+def w
+  load "wikihouse.rb"
+  puts
+  make_wikihouse Sketchup.active_model, true
 end
