@@ -48,9 +48,11 @@ REPLY_YES = 6
 if RUBY_PLATFORM =~ /mswin/
   WIKIHOUSE_CONF_FILE = File.join ENV['APPDATA'], 'WikiHouse.conf'
   WIKIHOUSE_SAVE = get_documents_directory ENV['USERPROFILE'], 'Documents'
+  WIKIHOUSE_MAC = false
 else
   WIKIHOUSE_CONF_FILE = File.join ENV['HOME'], '.wikihouse.conf'
   WIKIHOUSE_SAVE = get_documents_directory ENV['HOME'], 'Documents'
+  WIKIHOUSE_MAC = true
 end
 
 WIKIHOUSE_DEV = false
@@ -1205,7 +1207,7 @@ def load_wikihouse_download
     return
   end
 
-  dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, WIKIHOUSE_TITLE, 720, 640, 150, 150, true
+  dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, "#{WIKIHOUSE_TITLE}-Download", 720, 640, 150, 150, true
 
   dialog.add_action_callback "download" do |dialog, params|
     wikihouse_download_callback dialog, params
@@ -1253,14 +1255,6 @@ def load_wikihouse_make
     return
   end
 
-  # Auto-save the model if it has been modified.
-  if model.modified?
-    if not model.save model_path
-      show_wikihouse_error "Couldn't auto-save the model to #{model_path}"
-      return
-    end
-  end
-
   # Try and infer the model's filename.
   filename = model.title
   if filename == ""
@@ -1290,7 +1284,14 @@ def load_wikihouse_make
     io.write dxf_data
   end
 
-  UI.messagebox "Cutting sheets successfully saved to #{directory}"
+  UI.messagebox "Cutting sheets successfully saved to #{directory}", MB_OK
+
+  if WIKIHOUSE_MAC
+    dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, "#{WIKIHOUSE_TITLE}-Preview", 720, 640, 150, 150, true
+    dialog.set_file svg_filename
+    dialog.show
+    dialog.bring_to_front
+  end
 
 end
 
