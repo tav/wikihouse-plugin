@@ -166,8 +166,15 @@ def get_face_center(face)
     lb = Math.sqrt((dbx * dbx) + (dby * dby))
     lc = Math.sqrt((dcx * dcx) + (dcy * dcy))
 
-    px = ((ax * la) + (ax * lb) + (cx * lc)) / (la + lb + lc)
-    py = ((ay * la) + (ay * lb) + (cy * lc)) / (la + lb + lc)
+    max = (ax + bx) / 2
+    mbx = (bx + cx) / 2
+    mcx = (cx + ax) / 2
+    may = (ay + by) / 2
+    mby = (by + cy) / 2
+    mcy = (cy + ay) / 2
+
+    px = ((max * la) + (mbx * lb) + (mcx * lc)) / (la + lb + lc)
+    py = ((may * la) + (mby * lb) + (mcy * lc)) / (la + lb + lc)
 
     # angle = (Math.acos((la * la) + (lb * lb) - (lc * lc)) * Math::PI) / (360 * la * lb)
     # area = (la * lb * Math.sin(angle)) / 2
@@ -341,20 +348,19 @@ class WikiHousePanel
 
     # Initalise the ``identifier``, ``error`` and ``count`` attributes.
     @count = count
-    @error = true
+    @error = nil
     @identifier = "#{group_id}-#{face_id}"
 
     # Initialise a variable to hold temporarily generated entities.
     to_delete = []
+    recycle1, recycle2 = recycle
 
     # Create a new face with the vertices transformed if the transformed areas
     # do not match.
     if (face.area - face.area(transform)).abs > 0.1
-
       group_entity = root.add_group
       to_delete << group_entity
       group = group_entity.entities
-
       tface = group.add_face(face.outer_loop.vertices.map {|v| transform * v.position })
       face.loops.each do |loop|
         if not loop.outer?
@@ -362,13 +368,11 @@ class WikiHousePanel
           hole.erase! if hole.valid?
         end
       end
-
       face = tface
-
     end
 
     # Save the total surface area of the face.
-    area = face.area
+    total_area = face.area
 
     # Find the normal to the face.
     normal = face.normal
@@ -385,23 +389,20 @@ class WikiHousePanel
       x, y = nil, nil
     end
 
-    # Initialise various container variables.
-    curves = Hash.new
-    curve_info = Hash.new
-    last_curve_id = 0
-    loops, outer = [], []
+    # Initialise some meta variables.
+    loops = []
     slanted = false
 
     # Initialise a reference point for transforming slanted faces.
     base = face.outer_loop.vertices[0].position
 
-    # Loop through the edges -- ensuring that we are traversing them in the
-    # right order.
+    # Loop through the edges and convert the face into a 2D polygon -- ensuring
+    # that we are traversing the edges in the right order.
     face.loops.each do |loop|
+      newloop = []
       if loop.outer?
-        newloop = outer
+        loops.insert 0, newloop
       else
-        newloop = []
         loops << newloop
       end
       edgeuse = first = loop.edgeuses[0]
@@ -418,7 +419,7 @@ class WikiHousePanel
           if (start == next_start) or (start == next_stop)
             stop, start = start, stop
           elsif not ((stop == next_start) or (stop == next_stop))
-            puts "Unexpected edge connection"
+            @error = "Unexpected edge connection"
             return
           end
           virgin = nil
@@ -428,23 +429,9 @@ class WikiHousePanel
           if stop == prev
             stop, start = start, stop
           elsif not start == prev
-            puts "Unexpected edge connection"
+            @error = "Unexpected edge connection"
             return
           end
-        end
-        curve = edge.curve
-        if curve
-          curve_id = curves[curve]
-          if not curve_id
-            curve_id = last_curve_id
-            curves[curve] = curve_id
-            curve_info[curve_id] = [1, curve.center, curve.radius]
-            last_curve_id += 1
-          else
-            curve_info[curve_id][0] += 1
-          end
-        else
-          curve_id = nil
         end
         if x
           # If the face is parallel to a base axis, use the cheap conversion
@@ -484,87 +471,226 @@ class WikiHousePanel
       end
     end
 
-    if curves.length > 0
-      if slanted
-        puts "slanted"
-      end
-      puts curve_info.inspect
-    end
+    # Initialise some more meta variables.
+    areas = []
+    circles = []
+    cxs, cys = [], []
+    intersections = []
+    outer_loop = true
+    transformations = []
 
-    # Go through the various loops and identify potential curves.
-    nloops = [outer]
-    nloops.concat loops
-    nloops.each do |loop|
+    # Go through the various loops calculating centroids, edge transforms and
+    # identifying intersection points of potential curves.
+    loops.each do |loop|
       idx = 0
-      prev = nil
+      intersect_points = []
+      area = 0
+      cx, cy = 0, 0
       while 1
         # Get the next three points on the loop.
         p1, p2, p3 = loop[idx...idx+3]
         if not p3
-          break
+          if not p1
+            break
+          end
+          if not p2
+            # Loop around to the first edge.
+            p2 = loop[0]
+            p3 = loop[1]
+          else
+            # Loop around to the first point.
+            p3 = loop[0]
+          end
         end
         # Construct the edge vectors.
         edge1 = Geom::Vector3d.new(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z)
         edge2 = Geom::Vector3d.new(p3.x - p2.x, p3.y - p2.y, p3.z - p2.z)
-        if edge1.parallel? edge2
-          idx += 1
-          prev = nil
-          next
+        # Find the transformation to make each edge start at ORIGIN and lie on
+        # the positive x-axis.
+        if outer_loop
+          if edge1.samedirection? X_AXIS
+            angle = 0
+          elsif edge1.parallel? X_AXIS
+            angle = Math::PI
+          else
+            angle = edge1.angle_between X_AXIS
+            if not edge1.cross(X_AXIS).samedirection? Z_AXIS
+              angle = -angle
+            end
+          end
+          rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, angle
+          translate = Geom::Transformation.translation([-p1.x, -p1.y, 0])
+          transformations << (rotate * translate)
         end
-        # Find the perpendicular vectors.
-        cross = edge1.cross edge2
-        vec1 = edge1.cross cross
-        vec2 = edge2.cross cross
-        # Find the midpoints.
-        mid1 = Geom.linear_combination 0.5, p1, 0.5, p2
-        mid2 = Geom.linear_combination 0.5, p2, 0.5, p3
-        # Try finding an intersection.
-        line1 = [mid1, vec1]
-        line2 = [mid2, vec2]
-        intersect = Geom.intersect_line_line line1, line2
-        puts intersect.inspect
-        # If no intersection, try finding one in the other direction.
-        if not intersect
-          vec1.reverse!
-          vec2.reverse!
+        intersect = nil
+        if not edge1.parallel? edge2
+          # Find the perpendicular vectors.
+          cross = edge1.cross edge2
+          vec1 = edge1.cross cross
+          vec2 = edge2.cross cross
+          # Find the midpoints.
+          mid1 = Geom.linear_combination 0.5, p1, 0.5, p2
+          mid2 = Geom.linear_combination 0.5, p2, 0.5, p3
+          # Try finding an intersection.
+          line1 = [mid1, vec1]
+          line2 = [mid2, vec2]
           intersect = Geom.intersect_line_line line1, line2
+          # If no intersection, try finding one in the other direction.
+          if not intersect
+            vec1.reverse!
+            vec2.reverse!
+            intersect = Geom.intersect_line_line line1, line2
+          end
         end
-        if not intersect
-          idx += 1
-          prev = nil
-          next
+        intersect_points << intersect
+        if p3
+          x1, y1 = p1.x, p1.y
+          x2, y2 = p2.x, p2.y
+          cross = (x1 * y2) - (x2 * y1)
+          area += cross
+          cx += (x1 + x2) * cross
+          cy += (y1 + y2) * cross
         end
-        # We have an intersection!
         idx += 1
-        prev = edge1
       end
-      puts "----"
-    end
-    puts "====="
-
-    # Generate the new 2D face.
-    if nil
-      group_entity = root.add_group
-      to_delete << group_entity
-      group = group_entity.entities
-      newface = group.add_face outer
-      loops.each do |loop|
-        hole = group.add_face loop
-        hole.erase! if hole.valid?
-      end
-      puts face.area
-      puts newface.area
+      intersections << intersect_points
+      area = area * 0.5
+      areas << area.abs
+      cxs << (cx / (6 * area))
+      cys << (cy / (6 * area))
+      outer_loop = false
     end
 
-    # Find the orientation occupying the minimal bounding rectangle.
-    # vertices = face.outer_loop.vertices
+    # Allocate variables relating to the minimal alignment.
+    bounds_area = nil
+    bounds_min = nil
+    bounds_max = nil
+    transform = nil
+    outer = loops[0]
 
-    # Find the centre of the face.
+    # Transform all points on the outer edge to the different alignments and
+    # find the transformation which occupies the most minimal bounding
+    # rectangle.
+    transformations.each do |t|
+      bounds = Geom::BoundingBox.new
+      outer.each do |point|
+        point = t * point
+        bounds.add point
+      end
+      min, max = bounds.min, bounds.max
+      area = (max.x - min.x) * (max.y - min.y)
+      if (not bounds_area) or (area < bounds_area)
+        bounds_area = area
+        bounds_min, bounds_max = min, max
+        transform = t
+      end
+    end
+
+    # Transform all points on every loop.
+    loops.map! do |loop|
+      loop.map! do |point|
+        transform * point
+      end
+    end
+
+    # Grab the new outer and a flag for a more appropriate transform.
+    outer = loops[0]
+    new_transform = false
+
+    # Try rotating at half degree intervals to see if it yields any further
+    # savings.
+    (0.5..180.0).step(0.5) do |angle|
+      t = Geom::Transformation.rotation ORIGIN, Z_AXIS, angle.degrees
+      bounds = Geom::BoundingBox.new
+      outer.each do |point|
+        point = t * point
+        bounds.add point
+      end
+      min, max = bounds.min, bounds.max
+      area = (max.x - min.x) * (max.y - min.y)
+      if (not bounds_area) or (area < bounds_area)
+        bounds_area = area
+        bounds_min, bounds_max = min, max
+        transform = t
+        new_transform = true
+      end
+    end
+
+    # If we found a more optimised transform, apply it to all points on every
+    # loop.
+    if new_transform
+      loops.map! do |loop|
+        loop.map! do |point|
+          transform * point
+        end
+      end
+    end
+
+    # Find the centroid.
+    surface_area = areas.shift
+    topx = surface_area * cxs.shift
+    topy = surface_area * cys.shift
+    for i in 0...areas.length
+      area = areas[i]
+      topx -= area * cxs[i]
+      topy -= area * cys[i]
+      surface_area -= area
+    end
+    cx = topx / surface_area
+    cy = topy / surface_area
+    centroid = transform * [cx, cy, 0]
+
+    # Sanity check the area calculation.
+    if (total_area - surface_area).abs > 0.1
+      @error = "Surface area calculation differs"
+      return
+    end
+
+    # TODO(tav): We could also detect arcs once we figure out how to create
+    # polylined shapes with arcs in the DXF output. This may not be ideal as
+    # polyarcs may also cause issues with certain CNC routers.
+
+    # Detect all circular loops.
+    for i in 0...loops.length
+      points = intersections[i]
+      length = points.length
+      last = length - 1
+      circle = true
+      for j in 0...length
+        c1 = points[j]
+        c2 = points[j+1]
+        if last
+          c2 = points[0]
+        end
+        if not (c1 and c2)
+          circle = false
+          break
+        end
+        if ((c2.x - c1.x).abs > 0.1) or ((c2.y - c1.y).abs > 0.1)
+          circle = false
+          break
+        end
+      end
+      if circle and length >= 24
+        center = transform * points[0]
+        p1 = loops[i][0]
+        x = center.x - p1.x
+        y = center.y - p1.y
+        radius = Math.sqrt((x * x) + (y * y))
+        circles[i] = [center, radius]
+      end
+    end
 
     # Delete any temporarily generated groups.
     if to_delete.length > 0
       root.erase_entities to_delete
     end
+
+    p bounds_area
+    p total_area
+    #p centroid
+    #p circles
+    puts "====="
 
   end
 
@@ -585,8 +711,10 @@ class WikiHouseEntities
     $count_s3 = 0
     $count_s4 = 0
 
-    # Create a group to hold temporary entities.
-    recycle = root.add_group
+    # Create groups to hold temporary entities.
+    recycle1 = root.add_group
+    recycle2 = root.add_group
+    recycle = [recycle1, recycle2]
 
     # Initialise the default attribute values.
     @component_orphans = Hash.new
@@ -597,7 +725,7 @@ class WikiHouseEntities
     @orphan_count = oc = Hash.new
     @orphans = orphans = []
     @root = root
-    @to_delete = [recycle]
+    @to_delete = [recycle1, recycle2]
     @todo = todo = []
 
     # Set a loop counter variable and the default identity transformation.
