@@ -1393,7 +1393,7 @@ def load_wikihouse_upload
       io.read
     end
 
-    model_data = [model_data].pack('m').tr '+/', '-_'
+    model_data = [model_data].pack('m')
     set_dom_value dialog, "design-model", model_data
 
     # Capture the current view info.
@@ -1410,7 +1410,7 @@ def load_wikihouse_upload
       return
     end
 
-    front_thumbnail = [front_thumbnail].pack('m').tr '+/', '-_'
+    front_thumbnail = [front_thumbnail].pack('m')
     set_dom_value dialog, "design-model-preview", front_thumbnail
 
     # Rotate the camera.
@@ -1429,7 +1429,7 @@ def load_wikihouse_upload
       return
     end
 
-    back_thumbnail = [back_thumbnail].pack('m').tr '+/', '-_'
+    back_thumbnail = [back_thumbnail].pack('m')
     set_dom_value dialog, "design-model-preview-reverse", back_thumbnail
 
     # Set the camera view back to the original setup.
@@ -1443,8 +1443,8 @@ def load_wikihouse_upload
     if not sheets_data
       svg_data, dxf_data = "", ""
     else
-      svg_data = [sheets_data[0]].pack('m').tr '+/', '-_'
-      dxf_data = [sheets_data[1]].pack('m').tr '+/', '-_'
+      svg_data = [sheets_data[0]].pack('m')
+      dxf_data = [sheets_data[1]].pack('m')
     end
 
     set_dom_value dialog, "design-sheets", dxf_data
