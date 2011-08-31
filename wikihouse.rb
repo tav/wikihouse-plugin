@@ -364,7 +364,7 @@ class WikiHouseSVG
       <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
       <svg height="#{total_height}" version="1.1"
            viewBox="0 0 #{total_width} #{total_height}" xmlns="http://www.w3.org/2000/svg"
-           xmlns:xlink="http://www.w3.org/1999/xlink" style="background-color: black">
+           xmlns:xlink="http://www.w3.org/1999/xlink" style="background-color: #ffffff;">
       <desc>#{WIKIHOUSE_TITLE} Cutting Sheets</desc>"
       <a xlink:href="..." target="_top">
       <g visibility="hidden" pointer-events="all">
@@ -380,7 +380,7 @@ class WikiHouseSVG
       base_x = margin
       base_y = (scale * (s * (sheet_height + (sheet_margin * 4)))) + (margin * 2)
 
-      svg << "<rect x=\"#{base_x}\" y=\"#{base_y}\" width=\"#{scaled_width}\" height=\"#{scaled_height}\" fill=\"none\" stroke=\"rgb(255, 0, 0)\" stroke-width=\"1\" />"
+      svg << "<rect x=\"#{base_x}\" y=\"#{base_y}\" width=\"#{scaled_width}\" height=\"#{scaled_height}\" fill=\"none\" stroke=\"rgb(238, 238, 238)\" stroke-width=\"1\" />"
 
       base_y += (2 * margin)
 
@@ -399,7 +399,7 @@ class WikiHouseSVG
             y = (scale * center.y) + base_y
             radius = scale * radius
             svg << <<-CIRCLE.gsub(/^ {14}/, '')
-              <circle cx="#{x}" cy="#{y}" r="#{radius}" stroke="rgb(255, 0, 255)" stroke-width="1" fill="none" />
+              <circle cx="#{x}" cy="#{y}" r="#{radius}" stroke="rgb(51, 51, 51)" stroke-width="1" fill="none" />
               CIRCLE
           else
             loop = loops[i]
@@ -411,7 +411,7 @@ class WikiHouseSVG
             end
             path << "Z"
             svg << <<-PATH.gsub(/^ {14}/, '')
-              <path d="#{path.join ' '}" stroke="rgb(0, 255, 255)" stroke-width="1" fill="none" />
+              <path d="#{path.join ' '}" stroke="rgb(0, 0, 0)" stroke-width="1" fill="none" />
               PATH
           end
         end
