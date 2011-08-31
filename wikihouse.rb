@@ -57,8 +57,9 @@ end
 
 WIKIHOUSE_DEV = false
 WIKIHOUSE_HIDE = false
+WIKIHOUSE_LOCAL = false
 
-if WIKIHOUSE_DEV
+if WIKIHOUSE_LOCAL
   WIKIHOUSE_SERVER = "http://localhost:8080"
 else
   WIKIHOUSE_SERVER = "https://wikihouse-cc.appspot.com"
@@ -80,16 +81,22 @@ WIKIHOUSE_SHEET_HEIGHT = 1200.mm
 WIKIHOUSE_SHEET_MARGIN = 15.mm
 WIKIHOUSE_SHEET_WIDTH = 2400.mm
 
-WIKIHOUSE_PANEL_HEIGHT = WIKIHOUSE_SHEET_HEIGHT - (2 * WIKIHOUSE_SHEET_MARGIN)
-WIKIHOUSE_PANEL_WIDTH = WIKIHOUSE_SHEET_WIDTH - (2 * WIKIHOUSE_SHEET_MARGIN)
+WIKIHOUSE_SHEET_INNER_HEIGHT = WIKIHOUSE_SHEET_HEIGHT - (2 * WIKIHOUSE_SHEET_MARGIN)
+WIKIHOUSE_SHEET_INNER_WIDTH = WIKIHOUSE_SHEET_WIDTH - (2 * WIKIHOUSE_SHEET_MARGIN)
+WIKIHOUSE_PANEL_PADDED_HEIGHT = WIKIHOUSE_SHEET_INNER_HEIGHT - (2 * WIKIHOUSE_PANEL_PADDING)
+WIKIHOUSE_PANEL_PADDED_WIDTH = WIKIHOUSE_SHEET_INNER_WIDTH - (2 * WIKIHOUSE_PANEL_PADDING)
 
-WIKIHOUSE_PANEL_MAX_HEIGHT = (
-  WIKIHOUSE_SHEET_HEIGHT - (2 * WIKIHOUSE_SHEET_MARGIN) - (2 * WIKIHOUSE_PANEL_PADDING)
-)
-
-WIKIHOUSE_PANEL_MAX_WIDTH = (
-  WIKIHOUSE_SHEET_WIDTH - (2 * WIKIHOUSE_SHEET_MARGIN) - (2 * WIKIHOUSE_PANEL_PADDING)
-)
+WIKIHOUSE_DIMENSIONS = [
+  WIKIHOUSE_SHEET_HEIGHT,
+  WIKIHOUSE_SHEET_WIDTH,
+  WIKIHOUSE_SHEET_INNER_HEIGHT,
+  WIKIHOUSE_SHEET_INNER_WIDTH,
+  WIKIHOUSE_SHEET_MARGIN,
+  WIKIHOUSE_FONT_HEIGHT,
+  WIKIHOUSE_PANEL_PADDING,
+  WIKIHOUSE_PANEL_PADDED_HEIGHT,
+  WIKIHOUSE_PANEL_PADDED_WIDTH
+  ]
 
 # ------------------------------------------------------------------------------
 # Utility Functions
@@ -336,27 +343,25 @@ end
 
 class WikiHouseSVG
 
-  def initialize(layout)
+  def initialize(layout, scale)
     @layout = layout
+    @scale = scale
   end
 
   def generate
 
     layout = @layout
+    scale = @scale
+
+    dimensions= layout.dimensions
+    sheet_height, sheet_width, inner_height, inner_width, margin = dimensions
     sheets = layout.sheets
-    sheet_count = sheets.length
-    sheet_height = layout.sheet_height
-    sheet_width = layout.sheet_width
+    count = sheets.length
 
-    margin = layout.sheet_margin
-    scale = 8
-    total_height = scale * ((sheet_count * (sheet_height + (4 * margin))) + (margin * 2))
-    total_width = scale * (sheet_width + (margin * 2))
-
-    margin = scale * margin
-    sheet_margin = layout.sheet_margin
     scaled_height = scale * sheet_height
     scaled_width = scale * sheet_width
+    total_height = scale * ((count * (sheet_height + (4 * margin))) + (margin * 2))
+    total_width = scale * (sheet_width + (margin * 2))
 
     svg = []
     svg << <<-HEADER.gsub(/^ {6}/, '')
@@ -374,15 +379,16 @@ class WikiHouseSVG
 
     loop_count = 0
 
-    for s in 0...sheet_count
+    for s in 0...count
 
       sheet = sheets[s]
-      base_x = margin
-      base_y = (scale * (s * (sheet_height + (sheet_margin * 4)))) + (margin * 2)
+      base_x = scale * margin
+      base_y = scale * ((s * (sheet_height + (4 * margin))) + (margin * 2))
 
       svg << "<rect x=\"#{base_x}\" y=\"#{base_y}\" width=\"#{scaled_width}\" height=\"#{scaled_height}\" fill=\"none\" stroke=\"rgb(210, 210, 210)\" stroke-width=\"1\" />"
 
-      base_y += (2 * margin)
+      base_x += margin
+      base_y += margin
 
       sheet.each do |loops, circles|
 
@@ -437,22 +443,16 @@ end
 class WikiHouseLayoutEngine
 
   attr_accessor :sheets
-  attr_reader :font_height, :panel_padding, :sheet_height, :sheet_margin, :sheet_width
+  attr_reader :dimensions
 
-  def initialize(panels, root)
+  def initialize(panels, root, dimensions)
 
+    @dimensions = dimensions
     @sheets = sheets = []
 
     # Set local variables to save repeated lookups.
-    @font_height = font_height = WIKIHOUSE_FONT_HEIGHT
-    @panel_padding = panel_padding = WIKIHOUSE_PANEL_PADDING
-    @sheet_height = sheet_height = WIKIHOUSE_SHEET_HEIGHT
-    @sheet_margin = sheet_margin = WIKIHOUSE_SHEET_MARGIN
-    @sheet_width = sheet_width = WIKIHOUSE_SHEET_WIDTH
-
-    # Compute the sheet meta values that we need.
-    sheet_height = sheet_height - (2 * sheet_margin)
-    sheet_width = sheet_width - (2 * sheet_margin)
+    sheet_height, sheet_width, inner_height, inner_width,
+    sheet_margin, font_height, panel_padding = dimensions
 
     # Loop through the panels.
     panels.map! do |panel|
@@ -475,7 +475,6 @@ class WikiHouseLayoutEngine
       width = maxX - minX
       height = maxY - minY
       region = [[minX, maxY, 0], [maxX, maxY, 0], [maxX, minY, 0], [minX, minY, 0]]
-      # region = [[minX, minY, 0]]
 
       # Calculate the surface area that will be occupied by this panel.
       area = (maxX - minX) * (maxY - minY)
@@ -490,8 +489,7 @@ class WikiHouseLayoutEngine
 
     # Create the first sheet.
     sheet = []
-    x = y = sheet_margin
-    maxX, maxY = (sheet_width + sheet_margin), (sheet_height + sheet_margin)
+    x = y = 0
     loop_count = 0
     sheets << sheet
 
@@ -504,14 +502,17 @@ class WikiHouseLayoutEngine
       circles = panel.circles
       loops = panel.loops
 
+      # NOTE(tav): We assume that the width will always be greater than the
+      # height.
+
       # Sanity check the panel width and height against the sheet dimensions.
-      if width > sheet_width
+      if width > inner_width
         p [width, height]
         puts "Panel is wider than the sheet width!"
         next
       end
-      if height > sheet_height
-        if width > sheet_width
+      if height > inner_height
+        if height > inner_width
           puts "Panel is larger than the sheet width/height!"
           next
         end
@@ -527,14 +528,14 @@ class WikiHouseLayoutEngine
         Sketchup.set_status_text WIKIHOUSE_LAYOUT_STATUS[(loop_count/10) % 5]
         loop_count += 1
 
-        remx = maxX - x
+        remx = inner_width - x
 
         # If there's no horizontal space left on the current sheet, generate a
         # new sheet.
         if width > remx
           sheet = []
           sheets << sheet
-          x = y = sheet_margin
+          x = y = 0
         end
 
         trans = [x - origin[0], y - origin[1], 0]
@@ -594,7 +595,7 @@ class WikiHousePanel
   attr_accessor :area, :centroid, :circles, :n, :label, :loops, :max, :min
   attr_reader :error, :singleton
 
-  def initialize(root, face, transform, group_id, face_id, count)
+  def initialize(root, face, transform, group_id, face_id, count, limits)
 
     # Initalise some of the object attributes.
     @error = nil
@@ -795,10 +796,11 @@ class WikiHousePanel
     bounds_area = nil
     bounds_min = nil
     bounds_max = nil
-    max_height = WIKIHOUSE_PANEL_MAX_HEIGHT
-    max_width = WIKIHOUSE_PANEL_MAX_WIDTH
     transform = nil
     outer = loops[0]
+
+    # Unpack panel dimension limits.
+    panel_height, panel_width, panel_max_height, panel_max_width = limits
 
     # Try rotating at half degree intervals and find the transformation which
     # occupies the most minimal bounding rectangle.
@@ -812,10 +814,10 @@ class WikiHousePanel
       min, max = bounds.min, bounds.max
       height = max.y - min.y
       width = max.x - min.x
-      if (height - max_height) > 0.1
+      if (height - panel_height) > 0.1
         next
       end
-      if (width - max_width) > 0.1
+      if (width - panel_width) > 0.1
         next
       end
       area = width * height
@@ -825,16 +827,11 @@ class WikiHousePanel
         transform = t
       end
     end
-
     
     # If we couldn't find a fitting angle, set the panel to a singleton panel
     # (i.e. without any padding) and try again at 0.1 degree intervals.
     if not transform
-
       @singleton = true
-      max_height = WIKIHOUSE_PANEL_HEIGHT
-      max_width = WIKIHOUSE_PANEL_WIDTH
-
       (0...180.0).step(0.1) do |angle|
         t = Geom::Transformation.rotation ORIGIN, Z_AXIS, angle.degrees
         bounds = Geom::BoundingBox.new
@@ -845,10 +842,10 @@ class WikiHousePanel
         min, max = bounds.min, bounds.max
         height = max.y - min.y
         width = max.x - min.x
-        if (width - max_width) > 0.1
+        if (width - panel_max_width) > 0.1
           next
         end
-        if (height - max_height) > 0.1
+        if (height - panel_max_height) > 0.1
           next
         end
         area = width * height
@@ -858,7 +855,6 @@ class WikiHousePanel
           transform = t
         end
       end
-
     end
 
     # If we still couldn't find a fitting, abort.
@@ -955,7 +951,7 @@ class WikiHouseEntities
 
   attr_accessor :component_orphans, :deleted, :orphan_count, :orphans, :panels
 
-  def initialize(entities, root)
+  def initialize(entities, root, dimensions)
 
     $count_s1 = 0
     $count_s2 = 0
@@ -1029,6 +1025,9 @@ class WikiHouseEntities
     # Reset the loop counter.
     loop = 0
 
+    # Construct the panel limit dimensions.
+    limits = [dimensions[7], dimensions[8], dimensions[2], dimensions[2]]
+
     # Loop through each group and aggregate parsed data for the faces.
     @panels = items = []
     group_id = 0
@@ -1039,7 +1038,7 @@ class WikiHouseEntities
           face_id += 1
           Sketchup.set_status_text WIKIHOUSE_PANEL_STATUS[(loop/3) % 5]
           loop += 1
-          WikiHousePanel.new root, data[0], data[1], "0", face_id, 1
+          WikiHousePanel.new root, data[0], data[1], "0", face_id, 1, limits
         end
         items.concat panels
       else
@@ -1087,7 +1086,7 @@ class WikiHouseEntities
             face_id += 1
             Sketchup.set_status_text WIKIHOUSE_PANEL_STATUS[(loop/3) % 5]
             loop += 1
-            WikiHousePanel.new root, data[0], transform, group_str, face_id, panel_count
+            WikiHousePanel.new root, data[0], transform, group_str, face_id, panel_count, limits
           end
           group_id += 1
           items.concat panels
@@ -1415,8 +1414,10 @@ def make_wikihouse(model, interactive)
     entities = selection
   end
 
+  dimensions = WIKIHOUSE_DIMENSIONS
+
   # Load and parse the entities.
-  loader = WikiHouseEntities.new entities, root
+  loader = WikiHouseEntities.new entities, root, dimensions
 
   if interactive and loader.orphan_count.length != 0
     msg = "The cutting sheets may be incomplete. The following number of faces could not be matched appropriately:\n\n"
@@ -1433,10 +1434,10 @@ def make_wikihouse(model, interactive)
   panels = panels.select { |panel| !panel.error }
 
   # Run the detected panels through the layout engine.
-  layout = WikiHouseLayoutEngine.new panels, root
+  layout = WikiHouseLayoutEngine.new panels, root, dimensions
 
   # Generate the SVG file.
-  svg = WikiHouseSVG.new layout
+  svg = WikiHouseSVG.new layout, 8
   svg_data = svg.generate
 
   # Generate the DXF file.
@@ -1797,9 +1798,6 @@ def load_wikihouse_upload
     rotate = Geom::Transformation.rotation center, Z_AXIS, 180.degrees
     camera.set eye.transform(rotate), center, Z_AXIS
 
-    # Zoom out.
-    # view = view.zoom_extents
-
     # Get the data for the model's back image.
     back_thumbnail = get_wikihouse_thumbnail model, view, "back"
     if not back_thumbnail
@@ -1815,9 +1813,6 @@ def load_wikihouse_upload
     # Set the camera view back to the original setup.
     camera.set eye, target, up
 
-    # Note: we could have also rotated the entities, e.g.
-    # entities.transform_entities(rotate, entities.to_a)
-
     # Get the generated sheets data.
     sheets_data = make_wikihouse model, false
     if not sheets_data
@@ -1832,33 +1827,6 @@ def load_wikihouse_upload
 
     WIKIHOUSE_UPLOADS[dialog] = 1
     dialog.execute_script "wikihouse.upload();"
-
-    # # Generate a temporary file to save the exported model.
-    # filename = File.join(get_temp_directory, model.guid + ".dae")
-
-    # # Initialise the export options.
-    # export_opts = {
-    #   :author_attribution  => true,
-    #   :doublesided_faces   => true,
-    #   :edges               => false,
-    #   :materials_by_layer  => false,
-    #   :preserve_instancing => true,
-    #   :selectionset_only   => false,
-    #   :texture_maps        => true,
-    #   :triangulated_faces  => true
-    # }
-
-    # # XXX Options for hidden geometry and preserve hierarchies?
-
-    # # Try and export the model as a COLLADA file.
-    # exported = model.export filename, export_opts
-
-    # # Again, exit if export failed.
-    # if not exported
-    #   show_wikihouse_error "Couldn't export the model #{model_name}"
-    #   dialog.close
-    #   return
-    # end
 
   end
 
