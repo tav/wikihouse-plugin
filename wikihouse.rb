@@ -399,7 +399,8 @@ class WikiHouseSVG
             y = (scale * center.y) + base_y
             radius = scale * radius
             svg << <<-CIRCLE.gsub(/^ {14}/, '')
-              <circle cx="#{x}" cy="#{y}" r="#{radius}" stroke="rgb(51, 51, 51)" stroke-width="2" fill="none" />
+              <circle cx="#{x}" cy="#{y}" r="#{radius}"
+                      stroke="rgb(51, 51, 51)" stroke-width="2" fill="none" />
               CIRCLE
           else
             loop = loops[i]
@@ -1907,6 +1908,8 @@ end
 
 if not file_loaded? __FILE__
 
+  WIKIHOUSE_DIR = File.join File.dirname(__FILE__), "wikihouse-assets"
+
   # Initialise the data containers.
   WIKIHOUSE_DOWNLOADS = Hash.new
   WIKIHOUSE_UPLOADS = Hash.new
@@ -1920,6 +1923,8 @@ if not file_loaded? __FILE__
   end
 
   WIKIHOUSE_DOWNLOAD.tooltip = "Find new models to use at #{WIKIHOUSE_TITLE}"
+  WIKIHOUSE_DOWNLOAD.small_icon = File.join WIKIHOUSE_DIR, "download-16.png"
+  WIKIHOUSE_DOWNLOAD.large_icon = File.join WIKIHOUSE_DIR, "download.png"
 
   # TODO(tav): Irregardless of these procs, all commands seem to get greyed out
   # when no models are open -- at least, on OS X.
@@ -1932,6 +1937,8 @@ if not file_loaded? __FILE__
   end
 
   WIKIHOUSE_MAKE.tooltip = "Convert a model of a House into printable components"
+  WIKIHOUSE_MAKE.small_icon = File.join WIKIHOUSE_DIR, "make-16.png"
+  WIKIHOUSE_MAKE.large_icon = File.join WIKIHOUSE_DIR, "make.png"
   WIKIHOUSE_MAKE.set_validation_proc {
     if Sketchup.active_model
       MF_ENABLED
@@ -1945,6 +1952,8 @@ if not file_loaded? __FILE__
   end
 
   WIKIHOUSE_UPLOAD.tooltip = "Upload and share your model at #{WIKIHOUSE_TITLE}"
+  WIKIHOUSE_UPLOAD.small_icon = File.join WIKIHOUSE_DIR, "upload-16.png"
+  WIKIHOUSE_UPLOAD.large_icon = File.join WIKIHOUSE_DIR, "upload.png"
   WIKIHOUSE_UPLOAD.set_validation_proc {
     if Sketchup.active_model
       MF_ENABLED
