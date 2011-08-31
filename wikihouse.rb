@@ -61,7 +61,7 @@ WIKIHOUSE_HIDE = false
 if WIKIHOUSE_DEV
   WIKIHOUSE_SERVER = "http://localhost:8080"
 else
-  WIKIHOUSE_SERVER = "https://wikihouse-cc.appspot.com"
+  WIKIHOUSE_SERVER = "http://wikihouse-cc.appspot.com"
 end
 
 WIKIHOUSE_DOWNLOAD_PATH = "/library/sketchup"
