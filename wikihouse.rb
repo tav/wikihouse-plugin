@@ -366,7 +366,7 @@ class WikiHouseSVG
            viewBox="0 0 #{total_width} #{total_height}" xmlns="http://www.w3.org/2000/svg"
            xmlns:xlink="http://www.w3.org/1999/xlink" style="background-color: #ffffff;">
       <desc>#{WIKIHOUSE_TITLE} Cutting Sheets</desc>"
-      <a xlink:href="..." target="_top">
+      <!-- linkstart -->
       <g visibility="hidden" pointer-events="all">
         <rect x="0" y="0" width="100%" height="100%" fill="none" />
       </g>
@@ -380,7 +380,7 @@ class WikiHouseSVG
       base_x = margin
       base_y = (scale * (s * (sheet_height + (sheet_margin * 4)))) + (margin * 2)
 
-      svg << "<rect x=\"#{base_x}\" y=\"#{base_y}\" width=\"#{scaled_width}\" height=\"#{scaled_height}\" fill=\"none\" stroke=\"rgb(238, 238, 238)\" stroke-width=\"1\" />"
+      svg << "<rect x=\"#{base_x}\" y=\"#{base_y}\" width=\"#{scaled_width}\" height=\"#{scaled_height}\" fill=\"none\" stroke=\"rgb(210, 210, 210)\" stroke-width=\"1\" />"
 
       base_y += (2 * margin)
 
@@ -399,7 +399,7 @@ class WikiHouseSVG
             y = (scale * center.y) + base_y
             radius = scale * radius
             svg << <<-CIRCLE.gsub(/^ {14}/, '')
-              <circle cx="#{x}" cy="#{y}" r="#{radius}" stroke="rgb(51, 51, 51)" stroke-width="1" fill="none" />
+              <circle cx="#{x}" cy="#{y}" r="#{radius}" stroke="rgb(51, 51, 51)" stroke-width="2" fill="none" />
               CIRCLE
           else
             loop = loops[i]
@@ -411,7 +411,7 @@ class WikiHouseSVG
             end
             path << "Z"
             svg << <<-PATH.gsub(/^ {14}/, '')
-              <path d="#{path.join ' '}" stroke="rgb(0, 0, 0)" stroke-width="1" fill="none" />
+              <path d="#{path.join ' '}" stroke="rgb(0, 0, 0)" stroke-width="2" fill="none" />
               PATH
           end
         end
@@ -421,7 +421,7 @@ class WikiHouseSVG
       end
     end
 
-    svg << '</a>'
+    svg << '<!-- linkend -->'
     svg << '</svg>'
     svg.join "\n"
 
