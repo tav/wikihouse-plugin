@@ -342,18 +342,18 @@ end
 
 class WikiHousePanel
 
-  attr_accessor :count, :error, :identifier
+  attr_accessor :area, :centroid, :circles, :n, :error, :label, :loops, :max, :min, :transform
 
-  def initialize(root, recycle, face, transform, group_id, face_id, count)
+  def initialize(root, face, transform, group_id, face_id, count)
 
-    # Initalise the ``identifier``, ``error`` and ``count`` attributes.
-    @count = count
+    # Initalise some of the object attributes.
     @error = nil
-    @identifier = "#{group_id}-#{face_id}"
+    @label = "#{group_id}-#{face_id}"
+    @n = count
+    @transform = nil
 
     # Initialise a variable to hold temporarily generated entities.
     to_delete = []
-    recycle1, recycle2 = recycle
 
     # Create a new face with the vertices transformed if the transformed areas
     # do not match.
@@ -479,8 +479,8 @@ class WikiHousePanel
     outer_loop = true
     transformations = []
 
-    # Go through the various loops calculating centroids, edge transforms and
-    # identifying intersection points of potential curves.
+    # Go through the various loops calculating centroids and intersection points
+    # of potential curves.
     loops.each do |loop|
       idx = 0
       intersect_points = []
@@ -505,23 +505,6 @@ class WikiHousePanel
         # Construct the edge vectors.
         edge1 = Geom::Vector3d.new(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z)
         edge2 = Geom::Vector3d.new(p3.x - p2.x, p3.y - p2.y, p3.z - p2.z)
-        # Find the transformation to make each edge start at ORIGIN and lie on
-        # the positive x-axis.
-        if outer_loop
-          if edge1.samedirection? X_AXIS
-            angle = 0
-          elsif edge1.parallel? X_AXIS
-            angle = Math::PI
-          else
-            angle = edge1.angle_between X_AXIS
-            if not edge1.cross(X_AXIS).samedirection? Z_AXIS
-              angle = -angle
-            end
-          end
-          rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, angle
-          translate = Geom::Transformation.translation([-p1.x, -p1.y, 0])
-          transformations << (rotate * translate)
-        end
         intersect = nil
         if not edge1.parallel? edge2
           # Find the perpendicular vectors.
@@ -568,10 +551,10 @@ class WikiHousePanel
     transform = nil
     outer = loops[0]
 
-    # Transform all points on the outer edge to the different alignments and
-    # find the transformation which occupies the most minimal bounding
-    # rectangle.
-    transformations.each do |t|
+    # Try rotating at half degree intervals and find the transformation which
+    # occupies the most minimal bounding rectangle.
+    (0.5..180.0).step(0.5) do |angle|
+      t = Geom::Transformation.rotation ORIGIN, Z_AXIS, angle.degrees
       bounds = Geom::BoundingBox.new
       outer.each do |point|
         point = t * point
@@ -579,7 +562,7 @@ class WikiHousePanel
       end
       min, max = bounds.min, bounds.max
       area = (max.x - min.x) * (max.y - min.y)
-      if (not bounds_area) or (area < bounds_area)
+      if (not bounds_area) or ((bounds_area - area) > 0.1)
         bounds_area = area
         bounds_min, bounds_max = min, max
         transform = t
@@ -590,39 +573,6 @@ class WikiHousePanel
     loops.map! do |loop|
       loop.map! do |point|
         transform * point
-      end
-    end
-
-    # Grab the new outer and a flag for a more appropriate transform.
-    outer = loops[0]
-    new_transform = false
-
-    # Try rotating at half degree intervals to see if it yields any further
-    # savings.
-    (0.5..180.0).step(0.5) do |angle|
-      t = Geom::Transformation.rotation ORIGIN, Z_AXIS, angle.degrees
-      bounds = Geom::BoundingBox.new
-      outer.each do |point|
-        point = t * point
-        bounds.add point
-      end
-      min, max = bounds.min, bounds.max
-      area = (max.x - min.x) * (max.y - min.y)
-      if (not bounds_area) or (area < bounds_area)
-        bounds_area = area
-        bounds_min, bounds_max = min, max
-        transform = t
-        new_transform = true
-      end
-    end
-
-    # If we found a more optimised transform, apply it to all points on every
-    # loop.
-    if new_transform
-      loops.map! do |loop|
-        loop.map! do |point|
-          transform * point
-        end
       end
     end
 
@@ -640,7 +590,7 @@ class WikiHousePanel
     cy = topy / surface_area
     centroid = transform * [cx, cy, 0]
 
-    # Sanity check the area calculation.
+    # Sanity check the surface area calculation.
     if (total_area - surface_area).abs > 0.1
       @error = "Surface area calculation differs"
       return
@@ -659,7 +609,7 @@ class WikiHousePanel
       for j in 0...length
         c1 = points[j]
         c2 = points[j+1]
-        if last
+        if j == last
           c2 = points[0]
         end
         if not (c1 and c2)
@@ -681,16 +631,18 @@ class WikiHousePanel
       end
     end
 
+    # Save the generated data.
+    @area = area
+    @centroid = centroid
+    @circles = circles
+    @loops = loops
+    @max = bounds_max
+    @min = bounds_min
+
     # Delete any temporarily generated groups.
     if to_delete.length > 0
       root.erase_entities to_delete
     end
-
-    p bounds_area
-    p total_area
-    #p centroid
-    #p circles
-    puts "====="
 
   end
 
@@ -711,11 +663,6 @@ class WikiHouseEntities
     $count_s3 = 0
     $count_s4 = 0
 
-    # Create groups to hold temporary entities.
-    recycle1 = root.add_group
-    recycle2 = root.add_group
-    recycle = [recycle1, recycle2]
-
     # Initialise the default attribute values.
     @component_orphans = Hash.new
     @count = count = Hash.new
@@ -725,7 +672,7 @@ class WikiHouseEntities
     @orphan_count = oc = Hash.new
     @orphans = orphans = []
     @root = root
-    @to_delete = [recycle1, recycle2]
+    @to_delete = []
     @todo = todo = []
 
     # Set a loop counter variable and the default identity transformation.
@@ -791,9 +738,9 @@ class WikiHouseEntities
         face_id = 0
         panels = faces.map do |data|
           face_id += 1
-          Sketchup.set_status_text WIKIHOUSE_PANEL_STATUS[(loop/10) % 5]
+          Sketchup.set_status_text WIKIHOUSE_PANEL_STATUS[(loop/3) % 5]
           loop += 1
-          WikiHousePanel.new root, recycle, data[0], data[1], "0", face_id, 1
+          WikiHousePanel.new root, data[0], data[1], "0", face_id, 1
         end
         items.concat panels
       else
@@ -839,9 +786,9 @@ class WikiHouseEntities
           face_id = 0
           panels = faces.map do |data|
             face_id += 1
-            Sketchup.set_status_text WIKIHOUSE_PANEL_STATUS[(loop/10) % 5]
+            Sketchup.set_status_text WIKIHOUSE_PANEL_STATUS[(loop/3) % 5]
             loop += 1
-            WikiHousePanel.new root, recycle, data[0], transform, group_str, face_id, panel_count
+            WikiHousePanel.new root, data[0], transform, group_str, face_id, panel_count
           end
           group_id += 1
           items.concat panels
@@ -850,7 +797,7 @@ class WikiHouseEntities
     end
 
     total = 0
-    items.each { |item| total += item.count }
+    items.each { |item| total += item.n }
 
     if @orphans
       puts "Orphans: #{@orphans.length}"
