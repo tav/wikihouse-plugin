@@ -74,6 +74,23 @@ WIKIHOUSE_SPEC = "0.1"
 WIKIHOUSE_TEMP = get_temp_directory
 WIKIHOUSE_TITLE = "WikiHouse"
 
+WIKIHOUSE_FONT_HEIGHT = 30.mm
+WIKIHOUSE_PANEL_PADDING = 25.mm
+WIKIHOUSE_SHEET_HEIGHT = 1200.mm
+WIKIHOUSE_SHEET_MARGIN = 15.mm
+WIKIHOUSE_SHEET_WIDTH = 2400.mm
+
+WIKIHOUSE_PANEL_HEIGHT = WIKIHOUSE_SHEET_HEIGHT - (2 * WIKIHOUSE_SHEET_MARGIN)
+WIKIHOUSE_PANEL_WIDTH = WIKIHOUSE_SHEET_WIDTH - (2 * WIKIHOUSE_SHEET_MARGIN)
+
+WIKIHOUSE_PANEL_MAX_HEIGHT = (
+  WIKIHOUSE_SHEET_HEIGHT - (2 * WIKIHOUSE_SHEET_MARGIN) - (2 * WIKIHOUSE_PANEL_PADDING)
+)
+
+WIKIHOUSE_PANEL_MAX_WIDTH = (
+  WIKIHOUSE_SHEET_WIDTH - (2 * WIKIHOUSE_SHEET_MARGIN) - (2 * WIKIHOUSE_PANEL_PADDING)
+)
+
 # ------------------------------------------------------------------------------
 # Utility Functions
 # ------------------------------------------------------------------------------
@@ -223,7 +240,10 @@ end
 # ------------------------------------------------------------------------------
 
 WIKIHOUSE_DETECTION_STATUS = gen_status_msg "Detecting matching faces"
+WIKIHOUSE_DXF_STATUS = gen_status_msg "Generating DXF output"
+WIKIHOUSE_LAYOUT_STATUS = gen_status_msg "Nesting panels for layout"
 WIKIHOUSE_PANEL_STATUS = gen_status_msg "Generating panel data"
+WIKIHOUSE_SVG_STATUS = gen_status_msg "Generating SVG output"
 
 # ------------------------------------------------------------------------------
 # Load Handler
@@ -285,7 +305,7 @@ end
 
 class WikiHouseDummyGroup
 
-  attr_accessor :name
+  attr_reader :name
 
   def initialize
     @name = "Ungrouped Objects"
@@ -317,10 +337,94 @@ end
 class WikiHouseSVG
 
   def initialize(layout)
+    @layout = layout
   end
 
   def generate
-    ""
+
+    layout = @layout
+    sheets = layout.sheets
+    sheet_count = sheets.length
+    sheet_height = layout.sheet_height
+    sheet_width = layout.sheet_width
+
+    margin = layout.sheet_margin
+    scale = 8
+    total_height = scale * ((sheet_count * (sheet_height + (4 * margin))) + (margin * 2))
+    total_width = scale * (sheet_width + (margin * 2))
+
+    margin = scale * margin
+    sheet_margin = layout.sheet_margin
+    scaled_height = scale * sheet_height
+    scaled_width = scale * sheet_width
+
+    svg = []
+    svg << <<-HEADER.gsub(/^ {6}/, '')
+      <?xml version="1.0" standalone="no"?>
+      <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+      <svg height="#{total_height}" version="1.1"
+           viewBox="0 0 #{total_width} #{total_height}" xmlns="http://www.w3.org/2000/svg"
+           xmlns:xlink="http://www.w3.org/1999/xlink" style="background-color: black">
+      <desc>#{WIKIHOUSE_TITLE} Cutting Sheets</desc>"
+      <a xlink:href="..." target="_top">
+      <g visibility="hidden" pointer-events="all">
+        <rect x="0" y="0" width="100%" height="100%" fill="none" />
+      </g>
+      HEADER
+
+    loop_count = 0
+
+    for s in 0...sheet_count
+
+      sheet = sheets[s]
+      base_x = margin
+      base_y = (scale * (s * (sheet_height + (sheet_margin * 4)))) + (margin * 2)
+
+      svg << "<rect x=\"#{base_x}\" y=\"#{base_y}\" width=\"#{scaled_width}\" height=\"#{scaled_height}\" fill=\"none\" stroke=\"rgb(255, 0, 0)\" stroke-width=\"1\" />"
+
+      base_y += (2 * margin)
+
+      sheet.each do |loops, circles|
+
+        Sketchup.set_status_text WIKIHOUSE_SVG_STATUS[(loop_count/5) % 5]
+        loop_count += 1
+
+        svg << '<g fill="none" stroke="rgb(255, 255, 255)" stroke-width="1">'
+
+        for i in 0...loops.length
+          circle = circles[i]
+          if circle
+            center, radius = circle
+            x = (scale * center.x) + base_x
+            y = (scale * center.y) + base_y
+            radius = scale * radius
+            svg << <<-CIRCLE.gsub(/^ {14}/, '')
+              <circle cx="#{x}" cy="#{y}" r="#{radius}" stroke="rgb(255, 0, 255)" stroke-width="1" fill="none" />
+              CIRCLE
+          else
+            loop = loops[i]
+            first = loop.shift
+            path = []
+            path << "M #{(scale * first.x) + base_x} #{(scale * first.y) + base_y}"
+            loop.each do |point|
+              path << "L #{(scale * point.x) + base_x} #{(scale * point.y) + base_y}"
+            end
+            path << "Z"
+            svg << <<-PATH.gsub(/^ {14}/, '')
+              <path d="#{path.join ' '}" stroke="rgb(0, 255, 255)" stroke-width="1" fill="none" />
+              PATH
+          end
+        end
+
+        svg << '</g>'
+
+      end
+    end
+
+    svg << '</a>'
+    svg << '</svg>'
+    svg.join "\n"
+
   end
 
 end
@@ -331,7 +435,151 @@ end
 
 class WikiHouseLayoutEngine
 
-  def initialize(panels)
+  attr_accessor :sheets
+  attr_reader :font_height, :panel_padding, :sheet_height, :sheet_margin, :sheet_width
+
+  def initialize(panels, root)
+
+    @sheets = sheets = []
+
+    # Set local variables to save repeated lookups.
+    @font_height = font_height = WIKIHOUSE_FONT_HEIGHT
+    @panel_padding = panel_padding = WIKIHOUSE_PANEL_PADDING
+    @sheet_height = sheet_height = WIKIHOUSE_SHEET_HEIGHT
+    @sheet_margin = sheet_margin = WIKIHOUSE_SHEET_MARGIN
+    @sheet_width = sheet_width = WIKIHOUSE_SHEET_WIDTH
+
+    # Compute the sheet meta values that we need.
+    sheet_height = sheet_height - (2 * sheet_margin)
+    sheet_width = sheet_width - (2 * sheet_margin)
+
+    # Loop through the panels.
+    panels.map! do |panel|
+
+      # Find the bounding box.
+      min = panel.min
+      max = panel.max
+      minX, minY = min.x, min.y
+      maxX, maxY = max.x, max.y
+
+      # TODO(tav): Clip rectangular areas from each corner.
+
+      # Add padding around each side.
+      minX -= panel_padding
+      minY -= panel_padding
+      maxX += panel_padding
+      maxY += panel_padding
+
+      # Generate the region occupied by the panel.
+      width = maxX - minX
+      height = maxY - minY
+      region = [[minX, maxY, 0], [maxX, maxY, 0], [maxX, minY, 0], [minX, minY, 0]]
+      # region = [[minX, minY, 0]]
+
+      # Calculate the surface area that will be occupied by this panel.
+      area = (maxX - minX) * (maxY - minY)
+
+      # Save the generated data.
+      [panel, region, area, width, height]
+
+    end
+
+    # Sort the panels by surface area.
+    panels = panels.sort_by { |data| data[2] }.reverse
+
+    # Create the first sheet.
+    sheet = []
+    x = y = sheet_margin
+    maxX, maxY = (sheet_width + sheet_margin), (sheet_height + sheet_margin)
+    loop_count = 0
+    sheets << sheet
+
+    # Layout the panels horizontally onto sheets.
+    panels.each do |panel, region, area, width, height|
+
+      transform = Geom::Transformation.new
+      origin = region[0]
+
+      circles = panel.circles
+      loops = panel.loops
+
+      # Sanity check the panel width and height against the sheet dimensions.
+      if width > sheet_width
+        p [width, height]
+        puts "Panel is wider than the sheet width!"
+        next
+      end
+      if height > sheet_height
+        if width > sheet_width
+          puts "Panel is larger than the sheet width/height!"
+          next
+        end
+        # Rotate the panel by 90 degrees.
+        width, height = height, width
+        transform = Geom::Transformation.rotation ORIGIN, Z_AXIS, 90.degrees
+        origin = transform * region[1]
+        puts "rotated"
+      end
+
+      for i in 0...panel.n
+
+        Sketchup.set_status_text WIKIHOUSE_LAYOUT_STATUS[(loop_count/10) % 5]
+        loop_count += 1
+
+        remx = maxX - x
+
+        # If there's no horizontal space left on the current sheet, generate a
+        # new sheet.
+        if width > remx
+          sheet = []
+          sheets << sheet
+          x = y = sheet_margin
+        end
+
+        trans = [x - origin[0], y - origin[1], 0]
+        t = Geom::Transformation.translation trans
+        t = transform * t
+
+        # outer_loop = true
+        newloops = loops.map do |loop|
+          # skip circles
+          loop.map do |point|
+            newpoint = t * point
+            # if outer_loop
+            #   px, py = newpoint[0], newpoint[1]
+            #   if px > x
+            #     x = px
+            #   end
+            #   #if py > y
+            #   #  y = py
+            #   #end
+            # end
+            [newpoint.x, -newpoint.y, 0]
+          end
+        end
+
+        newcircles = circles.map do |circle|
+          if circle
+            center = t * circle[0]
+            center = [center.x, -center.y, 0]
+            [center, circle[1]]
+          else
+            nil
+          end
+        end
+
+        x += width
+        sheet << [newloops, newcircles]
+
+      end
+
+    end
+
+    # TODO(tav): Do the proper optimising layout.
+    while 1
+      break
+    end
+
   end
 
 end
@@ -342,7 +590,8 @@ end
 
 class WikiHousePanel
 
-  attr_accessor :area, :centroid, :circles, :n, :error, :label, :loops, :max, :min, :transform
+  attr_accessor :area, :centroid, :circles, :n, :label, :loops, :max, :min
+  attr_reader :error, :singleton
 
   def initialize(root, face, transform, group_id, face_id, count)
 
@@ -350,7 +599,7 @@ class WikiHousePanel
     @error = nil
     @label = "#{group_id}-#{face_id}"
     @n = count
-    @transform = nil
+    @singleton = false
 
     # Initialise a variable to hold temporarily generated entities.
     to_delete = []
@@ -389,9 +638,8 @@ class WikiHousePanel
       x, y = nil, nil
     end
 
-    # Initialise some meta variables.
+    # Initialise the ``loops`` variable.
     loops = []
-    slanted = false
 
     # Initialise a reference point for transforming slanted faces.
     base = face.outer_loop.vertices[0].position
@@ -461,7 +709,6 @@ class WikiHousePanel
             newedge = rotate * Geom::Vector3d.new(edge.length, 0, 0)
             newloop << [base.x + newedge.x, base.y + newedge.y, 0]
           end
-          slanted = true
         end
         edgeuse = edgeuse.next
         if edgeuse == first
@@ -477,7 +724,6 @@ class WikiHousePanel
     cxs, cys = [], []
     intersections = []
     outer_loop = true
-    transformations = []
 
     # Go through the various loops calculating centroids and intersection points
     # of potential curves.
@@ -548,12 +794,14 @@ class WikiHousePanel
     bounds_area = nil
     bounds_min = nil
     bounds_max = nil
+    max_height = WIKIHOUSE_PANEL_MAX_HEIGHT
+    max_width = WIKIHOUSE_PANEL_MAX_WIDTH
     transform = nil
     outer = loops[0]
 
     # Try rotating at half degree intervals and find the transformation which
     # occupies the most minimal bounding rectangle.
-    (0.5..180.0).step(0.5) do |angle|
+    (0...180.0).step(0.5) do |angle|
       t = Geom::Transformation.rotation ORIGIN, Z_AXIS, angle.degrees
       bounds = Geom::BoundingBox.new
       outer.each do |point|
@@ -561,12 +809,62 @@ class WikiHousePanel
         bounds.add point
       end
       min, max = bounds.min, bounds.max
-      area = (max.x - min.x) * (max.y - min.y)
+      height = max.y - min.y
+      width = max.x - min.x
+      if (height - max_height) > 0.1
+        next
+      end
+      if (width - max_width) > 0.1
+        next
+      end
+      area = width * height
       if (not bounds_area) or ((bounds_area - area) > 0.1)
         bounds_area = area
         bounds_min, bounds_max = min, max
         transform = t
       end
+    end
+
+    
+    # If we couldn't find a fitting angle, set the panel to a singleton panel
+    # (i.e. without any padding) and try again at 0.1 degree intervals.
+    if not transform
+
+      @singleton = true
+      max_height = WIKIHOUSE_PANEL_HEIGHT
+      max_width = WIKIHOUSE_PANEL_WIDTH
+
+      (0...180.0).step(0.1) do |angle|
+        t = Geom::Transformation.rotation ORIGIN, Z_AXIS, angle.degrees
+        bounds = Geom::BoundingBox.new
+        outer.each do |point|
+          point = t * point
+          bounds.add point
+        end
+        min, max = bounds.min, bounds.max
+        height = max.y - min.y
+        width = max.x - min.x
+        if (width - max_width) > 0.1
+          next
+        end
+        if (height - max_height) > 0.1
+          next
+        end
+        area = width * height
+        if (not bounds_area) or ((bounds_area - area) > 0.1)
+          bounds_area = area
+          bounds_min, bounds_max = min, max
+          transform = t
+        end
+      end
+
+    end
+
+    # If we still couldn't find a fitting, abort.
+    if not transform
+      @error = "Couldn't fit panel within cutting sheet"
+      puts @error
+      return
     end
 
     # Transform all points on every loop.
@@ -632,7 +930,7 @@ class WikiHousePanel
     end
 
     # Save the generated data.
-    @area = area
+    @area = total_area
     @centroid = centroid
     @circles = circles
     @loops = loops
@@ -1103,7 +1401,7 @@ end
 def make_wikihouse(model, interactive)
 
   # Isolate the entities to export.
-  entities = model.active_entities
+  entities = root = model.active_entities
   selection = model.selection
   if selection.empty?
     if interactive
@@ -1117,7 +1415,7 @@ def make_wikihouse(model, interactive)
   end
 
   # Load and parse the entities.
-  loader = WikiHouseEntities.new entities, model.active_entities
+  loader = WikiHouseEntities.new entities, root
 
   if interactive and loader.orphan_count.length != 0
     msg = "The cutting sheets may be incomplete. The following number of faces could not be matched appropriately:\n\n"
@@ -1127,8 +1425,14 @@ def make_wikihouse(model, interactive)
     UI.messagebox msg
   end
 
+  # Filter out any panels which raised an error.
+  panels = loader.panels.select { |panel| !panel.error }
+
+  # TODO(tav): For now, strip any singletons.
+  panels = panels.select { |panel| !panel.error }
+
   # Run the detected panels through the layout engine.
-  layout = WikiHouseLayoutEngine.new loader.panels
+  layout = WikiHouseLayoutEngine.new panels, root
 
   # Generate the SVG file.
   svg = WikiHouseSVG.new layout
@@ -1362,7 +1666,7 @@ def load_wikihouse_make
   UI.messagebox "Cutting sheets successfully saved to #{directory}", MB_OK
 
   if WIKIHOUSE_MAC
-    dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, "#{WIKIHOUSE_TITLE}-Preview", 720, 640, 150, 150, true
+    dialog = UI::WebDialog.new "Cutting Sheets Preview", true, "#{WIKIHOUSE_TITLE}-Preview", 800, 800, 150, 150, true
     dialog.set_file svg_filename
     dialog.show
     dialog.bring_to_front
@@ -1683,5 +1987,14 @@ end
 def w
   load "wikihouse.rb"
   puts
-  make_wikihouse Sketchup.active_model, true
+  data = make_wikihouse Sketchup.active_model, false
+  if data
+    filename = "/Users/tav/Documents/sketchup/Wikhouse10_tester3.svg"
+    svg_data, dxf_data = data
+    # Save the SVG data to the file.
+    File.open(filename, "wb") do |io|
+      io.write svg_data
+    end
+    "Sheets generated!"
+  end
 end
