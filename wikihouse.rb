@@ -1534,16 +1534,26 @@ def wikihouse_save_callback(dialog, download_id)
   filename = WIKIHOUSE_DOWNLOADS[download_id]
   WIKIHOUSE_DOWNLOADS.delete download_id
 
-  data = dialog.get_element_value "design-download-data"
+  segment_count = dialog.get_element_value "design-download-data"
   dialog.close
 
-  if data == ""
+  if segment_count == ""
     show_wikihouse_error errmsg
     return
   end
 
+  data = []
+  for i in 0...segment_count.to_i
+    segment = dialog.get_element_value "design-download-data-#{i}"
+    if segment == ""
+      show_wikihouse_error errmsg
+      return
+    end
+    data << segment
+  end
+
   # Decode the base64-encoded data.
-  data = data.unpack("m")[0]
+  data = data.join('').unpack("m")[0]
   if data == ""
     show_wikihouse_error errmsg
     return
