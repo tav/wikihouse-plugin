@@ -1615,6 +1615,7 @@ def load_wikihouse_download
   # Set the dialog's url and display it.
   dialog.set_url WIKIHOUSE_DOWNLOAD_URL
   dialog.show
+  dialog.show_modal
   dialog.bring_to_front
 
 end
@@ -1681,6 +1682,7 @@ def load_wikihouse_make
     dialog = UI::WebDialog.new "Cutting Sheets Preview", true, "#{WIKIHOUSE_TITLE}-Preview", 800, 800, 150, 150, true
     dialog.set_file svg_filename
     dialog.show
+    dialog.show_modal
     dialog.bring_to_front
   end
 
@@ -1877,6 +1879,7 @@ def load_wikihouse_upload
 
   dialog.set_url WIKIHOUSE_UPLOAD_URL
   dialog.show
+  dialog.show_modal
 
 end
 
