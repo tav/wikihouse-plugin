@@ -1454,7 +1454,7 @@ def make_wikihouse(model, interactive)
 end
 
 # ------------------------------------------------------------------------------
-# Download Callbacks
+# WebDialog Callbacks
 # ------------------------------------------------------------------------------
 
 def wikihouse_download_callback(dialog, params)
@@ -1586,6 +1586,92 @@ def wikihouse_error_callback(dialog, download_id)
 
 end
 
+def wikihouse_process_upload(dialog, model, model_path)
+
+  if File.size(model_path) > 12582912
+    reply = UI.messagebox "The model file is larger than 12MB. Would you like to purge unused objects, materials and styles?", MB_OKCANCEL
+    if reply == REPLY_OK
+      model.layers.purge_unused
+      model.styles.purge_unused
+      model.materials.purge_unused
+      model.definitions.purge_unused
+      if not model.save model_path
+        show_wikihouse_error "Couldn't save the purged model to #{model_path}"
+        dialog.close
+        return
+      end
+      if File.size(model_path) > 12582912
+        UI.messagebox "The model file is still larger than 12MB after purging. Please break up the file into smaller components."
+        dialog.close
+        return
+      end
+    else
+      dialog.close
+    end
+  end
+
+  # Get the model file data.
+  model_data = File.open(model_path, 'rb') do |io|
+    io.read
+  end
+
+  model_data = [model_data].pack('m')
+  set_dom_value dialog, "design-model", model_data
+
+  # Capture the current view info.
+  view = model.active_view
+  camera = view.camera
+  eye, target, up = camera.eye, camera.target, camera.up
+  center = model.bounds.center
+
+  # Get the data for the model's front image.
+  front_thumbnail = get_wikihouse_thumbnail model, view, "front"
+  if not front_thumbnail
+    show_wikihouse_error "Couldn't generate thumbnails for the model: #{model_name}"
+    dialog.close
+    return
+  end
+
+  front_thumbnail = [front_thumbnail].pack('m')
+  set_dom_value dialog, "design-model-preview", front_thumbnail
+
+  # Rotate the camera and zoom all the way out.
+  rotate = Geom::Transformation.rotation center, Z_AXIS, 180.degrees
+  camera.set eye.transform(rotate), center, Z_AXIS
+  view.zoom_extents
+
+  # Get the data for the model's back image.
+  back_thumbnail = get_wikihouse_thumbnail model, view, "back"
+  if not back_thumbnail
+    camera.set eye, target, up
+    show_wikihouse_error "Couldn't generate thumbnails for the model: #{model_name}"
+    dialog.close
+    return
+  end
+
+  back_thumbnail = [back_thumbnail].pack('m')
+  set_dom_value dialog, "design-model-preview-reverse", back_thumbnail
+
+  # Set the camera view back to the original setup.
+  camera.set eye, target, up
+
+  # Get the generated sheets data.
+  sheets_data = make_wikihouse model, false
+  if not sheets_data
+    svg_data, dxf_data = "", ""
+  else
+    svg_data = [sheets_data[0]].pack('m')
+    dxf_data = [sheets_data[1]].pack('m')
+  end
+
+  set_dom_value dialog, "design-sheets", dxf_data
+  set_dom_value dialog, "design-sheets-preview", svg_data
+
+  WIKIHOUSE_UPLOADS[dialog] = 1
+  dialog.execute_script "wikihouse.upload();"
+
+end
+
 # ------------------------------------------------------------------------------
 # Download Dialog
 # ------------------------------------------------------------------------------
@@ -1598,7 +1684,7 @@ def load_wikihouse_download
     return
   end
 
-  dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, "#{WIKIHOUSE_TITLE}-Download", 720, 640, 150, 150, true
+  dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, "#{WIKIHOUSE_TITLE}-Download", 480, 640, 150, 150, true
 
   dialog.add_action_callback "download" do |dialog, params|
     wikihouse_download_callback dialog, params
@@ -1616,7 +1702,6 @@ def load_wikihouse_download
   dialog.set_url WIKIHOUSE_DOWNLOAD_URL
   dialog.show
   dialog.show_modal
-  dialog.bring_to_front
 
 end
 
@@ -1683,7 +1768,6 @@ def load_wikihouse_make
     dialog.set_file svg_filename
     dialog.show
     dialog.show_modal
-    dialog.bring_to_front
   end
 
 end
@@ -1736,7 +1820,7 @@ def load_wikihouse_upload
   end
 
   # Instantiate an upload web dialog.
-  dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, "#{WIKIHOUSE_TITLE}-Upload", 720, 640, 150, 150, true
+  dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, "#{WIKIHOUSE_TITLE}-Upload", 480, 640, 150, 150, true
 
   # Load default values into the upload form.
   dialog.add_action_callback "load" do |dialog, params|
@@ -1758,88 +1842,7 @@ def load_wikihouse_upload
 
   # Process and prepare the model related data for upload.
   dialog.add_action_callback "process" do |dialog, params|
-
-    if File.size(model_path) > 12582912
-      reply = UI.messagebox "The model file is larger than 12MB. Would you like to purge unused objects, materials and styles?", MB_OKCANCEL
-      if reply == REPLY_OK
-        model.layers.purge_unused
-        model.styles.purge_unused
-        model.materials.purge_unused
-        model.definitions.purge_unused
-        if not model.save model_path
-          show_wikihouse_error "Couldn't save the purged model to #{model_path}"
-          dialog.close
-          return
-        end
-        if File.size(model_path) > 12582912
-          UI.messagebox "The model file is still larger than 12MB after purging. Please break up the file into smaller components."
-          dialog.close
-          return
-        end
-      else
-        dialog.close
-      end
-    end
-
-    # Get the model file data.
-    model_data = File.open(model_path, 'rb') do |io|
-      io.read
-    end
-
-    model_data = [model_data].pack('m')
-    set_dom_value dialog, "design-model", model_data
-
-    # Capture the current view info.
-    view = model.active_view
-    camera = view.camera
-    eye, target, up = camera.eye, camera.target, camera.up
-    center = model.bounds.center
-
-    # Get the data for the model's front image.
-    front_thumbnail = get_wikihouse_thumbnail model, view, "front"
-    if not front_thumbnail
-      show_wikihouse_error "Couldn't generate thumbnails for the model: #{model_name}"
-      dialog.close
-      return
-    end
-
-    front_thumbnail = [front_thumbnail].pack('m')
-    set_dom_value dialog, "design-model-preview", front_thumbnail
-
-    # Rotate the camera.
-    rotate = Geom::Transformation.rotation center, Z_AXIS, 180.degrees
-    camera.set eye.transform(rotate), center, Z_AXIS
-
-    # Get the data for the model's back image.
-    back_thumbnail = get_wikihouse_thumbnail model, view, "back"
-    if not back_thumbnail
-      camera.set eye, target, up
-      show_wikihouse_error "Couldn't generate thumbnails for the model: #{model_name}"
-      dialog.close
-      return
-    end
-
-    back_thumbnail = [back_thumbnail].pack('m')
-    set_dom_value dialog, "design-model-preview-reverse", back_thumbnail
-
-    # Set the camera view back to the original setup.
-    camera.set eye, target, up
-
-    # Get the generated sheets data.
-    sheets_data = make_wikihouse model, false
-    if not sheets_data
-      svg_data, dxf_data = "", ""
-    else
-      svg_data = [sheets_data[0]].pack('m')
-      dxf_data = [sheets_data[1]].pack('m')
-    end
-
-    set_dom_value dialog, "design-sheets", dxf_data
-    set_dom_value dialog, "design-sheets-preview", svg_data
-
-    WIKIHOUSE_UPLOADS[dialog] = 1
-    dialog.execute_script "wikihouse.upload();"
-
+    wikihouse_process_upload dialog, model, model_path
   end
 
   dialog.add_action_callback "uploaded" do |dialog, params|
@@ -1851,7 +1854,6 @@ def load_wikihouse_upload
     else
       UI.messagebox "Upload to #{WIKIHOUSE_TITLE} failed. Please try again."
     end
-    dialog.bring_to_front
   end
 
   dialog.add_action_callback "download" do |dialog, params|
