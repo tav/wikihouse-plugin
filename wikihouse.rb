@@ -524,7 +524,7 @@ class WikiHouseLayoutEngine
         puts "rotated"
       end
 
-      for i in 0...panel.n
+      for i in 0...panel.labels.length
 
         Sketchup.set_status_text WIKIHOUSE_LAYOUT_STATUS[(loop_count/10) % 5]
         loop_count += 1
@@ -593,15 +593,14 @@ end
 
 class WikiHousePanel
 
-  attr_accessor :area, :centroid, :circles, :n, :label, :loops, :max, :min
-  attr_reader :error, :singleton
+  attr_accessor :area, :centroid, :circles, :labels, :loops, :max, :min
+  attr_reader :bounds_area, :error, :shell_area, :singleton
 
-  def initialize(root, face, transform, group_id, face_id, count, limits)
+  def initialize(root, face, transform, labels, limits)
 
     # Initalise some of the object attributes.
     @error = nil
-    @label = "#{group_id}-#{face_id}"
-    @n = count
+    @labels = labels
     @singleton = false
 
     # Initialise a variable to hold temporarily generated entities.
@@ -873,7 +872,7 @@ class WikiHousePanel
     end
 
     # Find the centroid.
-    surface_area = areas.shift
+    @shell_area = surface_area = areas.shift
     topx = surface_area * cxs.shift
     topy = surface_area * cys.shift
     for i in 0...areas.length
@@ -929,6 +928,7 @@ class WikiHousePanel
 
     # Save the generated data.
     @area = total_area
+    @bounds_area = bounds_area
     @centroid = centroid
     @circles = circles
     @loops = loops
@@ -950,7 +950,7 @@ end
 
 class WikiHouseEntities
 
-  attr_accessor :component_orphans, :deleted, :orphan_count, :orphans, :panels
+  attr_accessor :orphans, :panels
 
   def initialize(entities, root, dimensions)
 
@@ -960,13 +960,9 @@ class WikiHouseEntities
     $count_s4 = 0
 
     # Initialise the default attribute values.
-    @component_orphans = Hash.new
-    @count = count = Hash.new
     @faces = Hash.new
-    @group_orphans = Hash.new
-    @groups = []
-    @orphan_count = oc = Hash.new
-    @orphans = orphans = []
+    @groups = groups = Hash.new
+    @orphans = orphans = Hash.new
     @root = root
     @to_delete = []
     @todo = todo = []
@@ -978,8 +974,8 @@ class WikiHouseEntities
     # Aggregate all the entities into the ``todo`` array.
     entities.each { |entity| todo << [entity, transform] }
 
-    # Visit all component and group entities defined within the model and
-    # accumulate all orphaned face entities.
+    # Visit all component and group entities defined within the model and count
+    # up all orphaned face entities.
     while todo.length != 0
       Sketchup.set_status_text WIKIHOUSE_DETECTION_STATUS[(loop/10) % 5]
       loop += 1
@@ -988,39 +984,17 @@ class WikiHouseEntities
       when "Group", "ComponentInstance"
         visit entity, transform
       when "Face"
-        orphans << [entity, transform]
-      end
-    end
-
-    # Try and see if any orphaned faces link up.
-    faces, orphans = visit_faces orphans, true
-
-    # If any orphans remain, update the ``@orphans`` attribute.
-    if orphans and orphans.length > 0
-      @orphans = orphans
-      orphans.each do |data|
-        orphan = data[0]
-        parent = orphan.parent
-        if not parent
-          parent = WIKIHOUSE_DUMMY_GROUP
-        end
-        if oc[parent]
-          oc[parent] += 1
+        if orphans[WIKIHOUSE_DUMMY_GROUP]
+          orphans[WIKIHOUSE_DUMMY_GROUP] += 1
         else
-          oc[parent] = 1
+          orphans[WIKIHOUSE_DUMMY_GROUP] = 1
         end
       end
-    else
+    end
+
+    # If there were no orphans, unset the ``@orphans`` attribute.
+    if not orphans.length > 0
       @orphans = nil
-    end
-
-    @component_orphans.each_pair do |component, orphans|
-      oc[component] = orphans.length
-    end
-
-    # But, if we got some faces back, update ``@faces``.
-    if faces and faces.length > 0
-      @faces["0"] = faces
     end
 
     # Reset the loop counter.
@@ -1031,75 +1005,47 @@ class WikiHouseEntities
 
     # Loop through each group and aggregate parsed data for the faces.
     @panels = items = []
-    group_id = 0
     @faces.each_pair do |group, faces|
-      if group == "0"
-        face_id = 0
-        panels = faces.map do |data|
-          face_id += 1
-          Sketchup.set_status_text WIKIHOUSE_PANEL_STATUS[(loop/3) % 5]
-          loop += 1
-          WikiHousePanel.new root, data[0], data[1], "0", face_id, 1, limits
-        end
-        items.concat panels
+      meta = groups[group]
+      sample = faces[0]
+      if meta.length == 1
+        f_data = { meta[0][0] => [meta[0][1]] }
       else
-        transforms = count[group]
-        sample = faces[0][0]
-        if transforms.length == 1
-          t_data = { transforms[0] => 1 }
-        else
-          t_data = Hash.new
-          transforms = transforms.map { |t| [t, sample.area(t)] }.sort_by { |t| t[1] }
-          while transforms.length != 0
-            t1, a1 = transforms.pop
-            idx = -1
-            t_data[t1] = 1
-            while 1
-              t2_data = transforms[idx]
-              if not t2_data
-                break
-              end
-              t2, a2 = t2_data
-              if (a2 - a1).abs > 0.1
-                break
-              end
-              t_data[t1] += 1
-              transforms.delete_at idx
-            end
-          end
-        end
-        t_data.each_pair do |transform, panel_count|
-          group_id_list = []
-          cur = group_id
+        f_data = Hash.new
+        meta = meta.map { |t, l| [t, l, sample.area(t)] }.sort_by { |t| t[2] }
+        while meta.length != 0
+          t1, l1, a1 = meta.pop
+          idx = -1
+          f_data[t1] = [l1]
           while 1
-            div = cur / PANEL_ID_ALPHABET_LENGTH
-            mod = cur % PANEL_ID_ALPHABET_LENGTH
-            group_id_list << mod
-            if div == 0
+            f2_data = meta[idx]
+            if not f2_data
               break
             end
-            cur = div - 1
+            t2, l2, a2 = f2_data
+            if (a2 - a1).abs > 0.1
+              break
+            end
+            f_data[t1] << l2
+            meta.delete_at idx
           end
-          group_id_list.reverse!
-          group_str = (group_id_list.map { |id| PANEL_ID_ALPHABET[id].chr }).join ""
-          face_id = 0
-          panels = faces.map do |data|
-            face_id += 1
-            Sketchup.set_status_text WIKIHOUSE_PANEL_STATUS[(loop/3) % 5]
-            loop += 1
-            WikiHousePanel.new root, data[0], transform, group_str, face_id, panel_count, limits
-          end
-          group_id += 1
-          items.concat panels
         end
+      end
+      f_data.each_pair do |transform, labels|
+        panels = faces.map do |face|
+          Sketchup.set_status_text WIKIHOUSE_PANEL_STATUS[(loop/3) % 5]
+          loop += 1
+          WikiHousePanel.new root, face, transform, labels, limits
+        end
+        items.concat panels
       end
     end
 
     total = 0
-    items.each { |item| total += item.n }
+    items.each { |item| total += item.labels.length }
 
     if @orphans
-      puts "Orphans: #{@orphans.length}"
+      puts "Orphans: #{@orphans.length} Groups"
     end
 
     puts "Items: #{total}"
@@ -1126,33 +1072,35 @@ class WikiHouseEntities
       transform = transform * group.transformation
     end
 
-    # Loop through previously visited groups and see if we've parsed any
-    # equivalent shapes.
-    for i in 0...groups.length
-      prev_group = groups[i]
-      if prev_group.equals? group and not @group_orphans[prev_group]
-        exists = true
-        @count[prev_group] << transform
-        break
-      end
+    # Get the label.
+    label = group.name
+    if label == ""
+      label = nil
     end
-
-    # If so, exit early.
-    return if exists
-
-    # Otherwise, add the new group/component instance.
-    groups << group
-    @count[group] = [transform]
 
     # Get the entities set.
     case group.typename
     when "Group"
       entities = group.entities
-      is_group = true
     else
-      entities = group.definition.entities
-      is_group = false
+      group = group.definition
+      entities = group.entities
+      # Check if we've seen this component before, and if so, reuse previous
+      # data.
+      if groups[group]
+        groups[group] << [transform, label]
+        entities.each do |entity|
+          case entity.typename
+          when "Group", "ComponentInstance"
+            @todo << [entity, transform]
+          end
+        end
+        return
+      end
     end
+
+    # Add the new group/component definition.
+    groups[group] = [[transform, label]]
 
     # Loop through the entities.
     entities.each do |entity|
@@ -1177,7 +1125,7 @@ class WikiHouseEntities
           entity.hidden = false
         end
         if ignore != 2 # TODO(tav): and entity.visible?
-          faces << [entity, transform]
+          faces << entity
         end
       when "Group", "ComponentInstance"
         # Append the entity to the todo attribute instead of recursively calling
@@ -1186,15 +1134,10 @@ class WikiHouseEntities
       end
     end
 
-    faces, orphans = visit_faces faces, true
+    faces, orphans = visit_faces faces, transform
 
     if orphans and orphans.length > 0
-      if is_group
-        @group_orphans[group] = true
-        @orphans.concat orphans
-      else
-        @component_orphans[group] = orphans
-      end
+      @orphans[group] = orphans.length
     end
 
     if faces and faces.length > 0
@@ -1203,7 +1146,7 @@ class WikiHouseEntities
 
   end
 
-  def visit_faces(faces, force)
+  def visit_faces(faces, transform)
 
     # Handle the case where no faces have been found or just a single orphaned
     # face exists.
@@ -1221,12 +1164,12 @@ class WikiHouseEntities
 
     # Sort the faces by their respective surface areas in order to minimise
     # lookups.
-    faces = faces.sort_by { |data| data[0].area data[1] }
+    faces = faces.sort_by { |face| face.area transform }
 
     # Iterate through the faces and see if we can find matching pairs.
     while faces.length != 0
-      face1, transform1 = faces.pop
-      area1 = face1.area transform1
+      face1 = faces.pop
+      area1 = face1.area transform
       # Ignore small faces.
       if area1 < 5
         next
@@ -1235,7 +1178,7 @@ class WikiHouseEntities
       match = false
       # Check against all remaining faces.
       while 1
-        face2, transform2 = faces[idx]
+        face2 = faces[idx]
         if not face2
           break
         end
@@ -1245,7 +1188,7 @@ class WikiHouseEntities
         end
         # Check that the area of both faces are close enough -- accounting for
         # any discrepancies caused by floating point rounding errors.
-        area2 = face2.area transform2
+        area2 = face2.area transform
         diff = (area2 - area1).abs
         if diff < 0.5 # TODO(tav): Ideally, this tolerance will be 0.1 or less.
           $count_s1 += 1
@@ -1348,7 +1291,7 @@ class WikiHouseEntities
               end
               # We have matching and connected faces!
               match = true
-              found << [face, transform1]
+              found << face
               faces.delete_at idx
               if WIKIHOUSE_HIDE
                 face1.hidden = true
@@ -1363,7 +1306,7 @@ class WikiHouseEntities
       if match
         next
       end
-      orphans << [face1, transform1]
+      orphans << face1
     end
 
     # Return all the found and orphaned faces.
@@ -1374,17 +1317,13 @@ class WikiHouseEntities
   def purge
 
     # Delete any custom generated entity groups.
-    if @to_delete.length != 0
+    if @to_delete and @to_delete.length != 0
       @root.erase_entities @to_delete
     end
 
     # Nullify all container attributes.
-    @component_orphans = nil
-    @count = nil
     @faces = nil
-    @group_orphans = nil
     @groups = nil
-    @orphan_count = nil
     @orphans = nil
     @root = nil
     @to_delete = nil
@@ -1427,9 +1366,9 @@ def make_wikihouse(model, interactive)
     end
   end
 
-  if interactive and loader.orphan_count.length != 0
+  if interactive and loader.orphans
     msg = "The cutting sheets may be incomplete. The following number of faces could not be matched appropriately:\n\n"
-    loader.orphan_count.each_pair do |group, count|
+    loader.orphans.each_pair do |group, count|
       msg += "    #{count} in #{group.name.length > 0 and group.name or 'Group#???'}\n"
     end
     UI.messagebox msg
