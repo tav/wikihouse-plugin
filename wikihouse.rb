@@ -77,15 +77,13 @@ WIKIHOUSE_TEMP = get_temp_directory
 WIKIHOUSE_TITLE = "WikiHouse"
 
 WIKIHOUSE_FONT_HEIGHT = 30.mm
-WIKIHOUSE_PANEL_PADDING = 25.mm
+WIKIHOUSE_PANEL_PADDING = 25.mm / 2
 WIKIHOUSE_SHEET_HEIGHT = 1200.mm
-WIKIHOUSE_SHEET_MARGIN = 15.mm
+WIKIHOUSE_SHEET_MARGIN = 15.mm - WIKIHOUSE_PANEL_PADDING
 WIKIHOUSE_SHEET_WIDTH = 2400.mm
 
 WIKIHOUSE_SHEET_INNER_HEIGHT = WIKIHOUSE_SHEET_HEIGHT - (2 * WIKIHOUSE_SHEET_MARGIN)
 WIKIHOUSE_SHEET_INNER_WIDTH = WIKIHOUSE_SHEET_WIDTH - (2 * WIKIHOUSE_SHEET_MARGIN)
-WIKIHOUSE_PANEL_PADDED_HEIGHT = WIKIHOUSE_SHEET_INNER_HEIGHT - (2 * WIKIHOUSE_PANEL_PADDING)
-WIKIHOUSE_PANEL_PADDED_WIDTH = WIKIHOUSE_SHEET_INNER_WIDTH - (2 * WIKIHOUSE_PANEL_PADDING)
 
 WIKIHOUSE_DIMENSIONS = [
   WIKIHOUSE_SHEET_HEIGHT,
@@ -93,10 +91,8 @@ WIKIHOUSE_DIMENSIONS = [
   WIKIHOUSE_SHEET_INNER_HEIGHT,
   WIKIHOUSE_SHEET_INNER_WIDTH,
   WIKIHOUSE_SHEET_MARGIN,
-  WIKIHOUSE_FONT_HEIGHT,
   WIKIHOUSE_PANEL_PADDING,
-  WIKIHOUSE_PANEL_PADDED_HEIGHT,
-  WIKIHOUSE_PANEL_PADDED_WIDTH
+  WIKIHOUSE_FONT_HEIGHT
   ]
 
 # ------------------------------------------------------------------------------
@@ -361,7 +357,7 @@ class WikiHouseSVG
 
     scaled_height = scale * sheet_height
     scaled_width = scale * sheet_width
-    total_height = scale * ((count * (sheet_height + (4 * margin))) + (margin * 2))
+    total_height = scale * ((count * (sheet_height + (12 * margin))) + (margin * 10))
     total_width = scale * (sheet_width + (margin * 2))
 
     svg = []
@@ -384,12 +380,12 @@ class WikiHouseSVG
 
       sheet = sheets[s]
       base_x = scale * margin
-      base_y = scale * ((s * (sheet_height + (4 * margin))) + (margin * 2))
+      base_y = scale * ((s * (sheet_height + (12 * margin))) + (margin * 9))
 
       svg << "<rect x=\"#{base_x}\" y=\"#{base_y}\" width=\"#{scaled_width}\" height=\"#{scaled_height}\" fill=\"none\" stroke=\"rgb(210, 210, 210)\" stroke-width=\"1\" />"
 
-      base_x += margin
-      base_y += margin
+      base_x += scale * margin
+      base_y += scale * margin
 
       sheet.each do |loops, circles|
 
@@ -453,7 +449,11 @@ class WikiHouseLayoutEngine
 
     # Set local variables to save repeated lookups.
     sheet_height, sheet_width, inner_height, inner_width,
-    sheet_margin, font_height, panel_padding = dimensions
+    sheet_margin, panel_padding, font_height = dimensions
+
+    # Filter out the singletons from the other panels.
+    singletons = panels.select { |panel| panel.singleton }
+    panels = panels.select { |panel| !panel.singleton }
 
     # Loop through the panels.
     panels.map! do |panel|
@@ -1001,7 +1001,9 @@ class WikiHouseEntities
     loop = 0
 
     # Construct the panel limit dimensions.
-    limits = [dimensions[7], dimensions[8], dimensions[2], dimensions[2]]
+    height, width, padding = [dimensions[2], dimensions[3], dimensions[5]]
+    padding = 2 * padding
+    limits = [height - padding, width - padding, height, width]
 
     # Loop through each group and aggregate parsed data for the faces.
     @panels = items = []
