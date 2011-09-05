@@ -58,6 +58,7 @@ end
 WIKIHOUSE_DEV = false
 WIKIHOUSE_HIDE = false
 WIKIHOUSE_LOCAL = false
+WIKIHOUSE_SHORT_CIRCUIT = false
 
 if WIKIHOUSE_LOCAL
   WIKIHOUSE_SERVER = "http://localhost:8080"
@@ -1417,7 +1418,14 @@ def make_wikihouse(model, interactive)
   dimensions = WIKIHOUSE_DIMENSIONS
 
   # Load and parse the entities.
-  loader = WikiHouseEntities.new entities, root, dimensions
+  if WIKIHOUSE_SHORT_CIRCUIT and $wikloader
+    loader = $wikloader
+  else
+    loader = WikiHouseEntities.new entities, root, dimensions
+    if WIKIHOUSE_SHORT_CIRCUIT
+      $wikloader = loader
+    end
+  end
 
   if interactive and loader.orphan_count.length != 0
     msg = "The cutting sheets may be incomplete. The following number of faces could not be matched appropriately:\n\n"
@@ -1429,9 +1437,6 @@ def make_wikihouse(model, interactive)
 
   # Filter out any panels which raised an error.
   panels = loader.panels.select { |panel| !panel.error }
-
-  # TODO(tav): For now, strip any singletons.
-  panels = panels.select { |panel| !panel.error }
 
   # Run the detected panels through the layout engine.
   layout = WikiHouseLayoutEngine.new panels, root, dimensions
