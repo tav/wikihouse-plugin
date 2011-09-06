@@ -454,10 +454,6 @@ class WikiHouseLayoutEngine
     singletons = panels.select { |panel| panel.singleton }
     panels = panels.select { |panel| !panel.singleton }
 
-    # Initialise the identity and rotation transformations.
-    identity = Geom::Transformation.new
-    rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, 90.degrees
-
     # Loop through the panels.
     panels.map! do |panel|
 
@@ -508,15 +504,17 @@ class WikiHouseLayoutEngine
         # Define the padded outer outline.
         # outline = [[min_x, max_y, 0], [max_x, max_y, 0], [max_x, min_y, 0], [min_x, min_y, 0]]
         outer = [[min_x, min_y, 0], [max_x, min_y, 0], [max_x, max_y, 0], [min_x, max_y, 0]]
-        outlines = [[identity, inner, outer]]
+        outlines = [[nil, inner, outer]]
 
         # See if the panel can be rotated, if so add the transformation.
         if not no_padding
           if (inner_width > height) and (inner_height > width)
-            inner = [inner[1], inner[0], inner[3], inner[2]]
-            outer = [outer[1], outer[0], outer[3], outer[2]]
-            outlines << [rotate, inner, outer]
+            # inner = [inner[3], inner[0], inner[1], inner[2]]
+            # outer = [outer[3], outer[0], outer[1], outer[2]]
+            outlines << [90.degrees, inner, outer]
+            outlines << [270.degrees, inner, outer]
           end
+          outlines << [180.degrees, inner, outer]
         end
 
       end
@@ -543,8 +541,6 @@ class WikiHouseLayoutEngine
 
     # Make local certain global constants.
     outside = Sketchup::Face::PointOutside
-    on_edge = Sketchup::Face::PointOnEdge
-    on_vertex = Sketchup::Face::PointOnVertex
 
     # panels = panels[-10...-1]
     # panels = panels[-5...-1]
@@ -610,7 +606,7 @@ class WikiHouseLayoutEngine
             face.outer_loop.vertices.each do |vertex|
               origin = vertex.position
               # Loop through each outline.
-              outlines.each do |transform, inner, outer|
+              outlines.each do |angle, inner, outer|
                 # Loop through every vertex of the outline, starting from the
                 # top left.
                 p_idx = -1
@@ -620,9 +616,10 @@ class WikiHouseLayoutEngine
                   if not p0
                     break
                   end
-                  p0 = transform * p0
-                  translate = Geom::Transformation.translation ([origin.x - p0[0], origin.y - p0[1], 0])
-                  transform = transform * translate
+                  transform = Geom::Transformation.translation ([origin.x - p0[0], origin.y - p0[1], 0])
+                  if angle
+                    transform = transform * Geom::Transformation.rotation(origin, Z_AXIS, angle)
+                  end
                   # Check every point to see if it's within the available region.
                   all_match = true
                   inner.each do |point|
@@ -730,18 +727,11 @@ class WikiHouseLayoutEngine
 
         if match
 
-          inner, outer = used
           available_area -= panel_area
-
-          inner_face = inner_faces.add_face(inner.map { |p| t * p })
-          outer_face = outer_faces.add_face(outer.map { |p| t * p })
+          inner_faces.add_face(used[0].map { |p| t * p })
+          outer_faces.add_face(used[1].map { |p| t * p })
           placed_i = inner_faces.select { |e| e.typename == "Face" }
           placed_o = outer_faces.select { |e| e.typename == "Face" }
-
-          # if c == 20
-          #   panels = []
-          #   next
-          # end
 
           # Generate the new loop vertices.
           loops = panel.loops.map do |loop|
