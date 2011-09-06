@@ -350,8 +350,7 @@ class WikiHouseSVG
     layout = @layout
     scale = @scale
 
-    dimensions= layout.dimensions
-    sheet_height, sheet_width, inner_height, inner_width, margin = dimensions
+    sheet_height, sheet_width, inner_height, inner_width, margin = layout.dimensions
     sheets = layout.sheets
     count = sheets.length
 
@@ -455,133 +454,521 @@ class WikiHouseLayoutEngine
     singletons = panels.select { |panel| panel.singleton }
     panels = panels.select { |panel| !panel.singleton }
 
+    # Initialise the identity and rotation transformations.
+    identity = Geom::Transformation.new
+    rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, 90.degrees
+
     # Loop through the panels.
     panels.map! do |panel|
 
-      # Find the bounding box.
+      # Get padding related info.
+      no_padding = panel.no_padding
+
+      # Get the bounding box.
       min = panel.min
       max = panel.max
-      minX, minY = min.x, min.y
-      maxX, maxY = max.x, max.y
+      min_x, min_y = min.x, min.y
+      max_x, max_y = max.x, max.y
 
-      # TODO(tav): Clip rectangular areas from each corner.
+      # Set a flag to indicate clipped panels.
+      clipped = false
 
-      # Add padding around each side.
-      minX -= panel_padding
-      minY -= panel_padding
-      maxX += panel_padding
-      maxY += panel_padding
+      # Determine if the potential savings exceeds the hard-coded threshold. If
+      # so, see if we can generate an outline with rectangular areas clipped
+      # from each corner.
+      if (panel.bounds_area - panel.shell_area) > 50
+        # puts (panel.bounds_area - panel.shell_area)
+      end
 
-      # Generate the region occupied by the panel.
-      width = maxX - minX
-      height = maxY - minY
-      region = [[minX, maxY, 0], [maxX, maxY, 0], [maxX, minY, 0], [minX, minY, 0]]
+      # Otherwise, treat the bounding box as the outline.
+      if not clipped
 
-      # Calculate the surface area that will be occupied by this panel.
-      area = (maxX - minX) * (maxY - minY)
+        # Define the inner outline.
+        inner = [[min_x, min_y, 0], [max_x, min_y, 0], [max_x, max_y, 0], [min_x, max_y, 0]]
+
+        # Add padding around each side.
+        if not no_padding
+          min_x -= panel_padding
+          min_y -= panel_padding
+          max_x += panel_padding
+          max_y += panel_padding
+        elsif no_padding == "w"
+          min_y -= panel_padding
+          max_y += panel_padding
+        elsif no_padding == "h"
+          min_x -= panel_padding
+          max_x += panel_padding
+        end
+
+        # Calculate the surface area that will be occupied by this panel.
+        width = max_x - min_x
+        height = max_y - min_y
+        area = width * height
+
+        # Define the padded outer outline.
+        # outline = [[min_x, max_y, 0], [max_x, max_y, 0], [max_x, min_y, 0], [min_x, min_y, 0]]
+        outer = [[min_x, min_y, 0], [max_x, min_y, 0], [max_x, max_y, 0], [min_x, max_y, 0]]
+        outlines = [[identity, inner, outer]]
+
+        # See if the panel can be rotated, if so add the transformation.
+        if not no_padding
+          if (inner_width > height) and (inner_height > width)
+            outlines << [rotate, inner, outer]
+          end
+        end
+
+      end
 
       # Save the generated data.
-      [panel, region, area, width, height]
+      [panel, outlines, area, panel.labels.dup]
 
     end
 
     # Sort the panels by surface area.
     panels = panels.sort_by { |data| data[2] }.reverse
 
-    # Create the first sheet.
-    sheet = []
-    x = y = 0
+    # Generate new groups to hold sheet faces.
+    inner_group = root.add_group
+    inner_faces = inner_group.entities
+    outer_group = root.add_group
+    outer_faces = outer_group.entities
+    temp_group = root.add_group
+    temp_faces = temp_group.entities
+    total_area = inner_width * inner_height
+
+    # Initialise the loop counter.
     loop_count = 0
-    sheets << sheet
 
-    # Layout the panels horizontally onto sheets.
-    panels.each do |panel, region, area, width, height|
+    # Make local certain global constants.
+    outside = Sketchup::Face::PointOutside
+    on_edge = Sketchup::Face::PointOnEdge
+    on_vertex = Sketchup::Face::PointOnVertex
 
-      transform = Geom::Transformation.new
-      origin = region[0]
+    # panels = panels[-10...-1]
+    # panels = panels[-5...-1]
+    c = 0
 
-      circles = panel.circles
-      loops = panel.loops
+    # Do the optimising layout.
+    while 1
 
-      # NOTE(tav): We assume that the width will always be greater than the
-      # height.
+      # Create a fresh sheet.
+      sheet = []
+      available_area = total_area
+      idx = 0
+      placed_i = []
+      placed_o = []
 
-      # Sanity check the panel width and height against the sheet dimensions.
-      if width > inner_width
-        p [width, height]
-        puts "Panel is wider than the sheet width!"
-        next
-      end
-      if height > inner_height
-        if height > inner_width
-          puts "Panel is larger than the sheet width/height!"
-          next
-        end
-        # Rotate the panel by 90 degrees.
-        width, height = height, width
-        transform = Geom::Transformation.rotation ORIGIN, Z_AXIS, 90.degrees
-        origin = transform * region[1]
-        puts "rotated"
-      end
-
-      for i in 0...panel.labels.length
+      while available_area > 0
 
         Sketchup.set_status_text WIKIHOUSE_LAYOUT_STATUS[(loop_count/10) % 5]
         loop_count += 1
 
-        remx = inner_width - x
-
-        # If there's no horizontal space left on the current sheet, generate a
-        # new sheet.
-        if width > remx
-          sheet = []
-          sheets << sheet
-          x = y = 0
+        panel_data = panels[idx]
+        if not panel_data
+          break
         end
 
-        trans = [x - origin[0], y - origin[1], 0]
-        t = Geom::Transformation.translation trans
-        t = transform * t
+        panel, outlines, panel_area, labels = panel_data
+        if panel_area > available_area
+          idx += 1
+          next
+        end
 
-        # outer_loop = true
-        newloops = loops.map do |loop|
-          # skip circles
-          loop.map do |point|
-            newpoint = t * point
-            # if outer_loop
-            #   px, py = newpoint[0], newpoint[1]
-            #   if px > x
-            #     x = px
-            #   end
-            #   #if py > y
-            #   #  y = py
-            #   #end
-            # end
-            [newpoint.x, -newpoint.y, 0]
+        match = true
+        t = nil
+        used = nil
+
+        # If this is the first item, do the cheap placement check.
+        if sheet.length == 0
+          transform, inner, outer = outlines[0]
+          point = outer[0]
+          translate = Geom::Transformation.translation [-point[0], -point[1], 0]
+          inner.each do |point|
+            point = translate * point
+            if (point.x > inner_width) or (-point.y > inner_height)
+              p (point.x - inner_width)
+              p (point.y - inner_height)
+              match = false
+              break
+            end
+          end
+          if not match
+            puts "Error: couldn't place panel onto an empty sheet"
+            panels.delete_at idx
+            next
+          end
+          t = translate
+          used = [inner, outer]
+        else
+          # Otherwise, loop around the already placed panel regions and see if
+          # the outline can be placed next to it.
+          match = false
+          placed_o.each do |face|
+            # Loop through the vertices of the available region.
+            face.outer_loop.vertices.each do |vertex|
+              origin = vertex.position
+              # Loop through each outline.
+              outlines.each do |transform, inner, outer|
+                # Loop through every vertex of the outline, starting from the
+                # top left.
+                p_idx = -1
+                # p ["length", outline.length]
+                all_match = true
+                while 1
+                  p0 = outer[p_idx]
+                  if not p0
+                    break
+                  end
+                  p0 = transform * p0
+                  translate = Geom::Transformation.translation ([origin.x - p0[0], origin.y - p0[1], 0])
+                  transform = transform * translate
+                  # Check every point to see if it's within the available region.
+                  all_match = true
+                  inner.each do |point|
+                    point = transform * point
+                    px, py = point.x, point.y
+                    if (px < 0) or (py < 0) or (px > inner_width) or (py > inner_height)
+                      all_match = false
+                      break
+                    end
+                    placed_i.each do |placement|
+                      if placement.classify_point(point) != outside
+                      # puts placement
+                      # puts placement.classify_point point
+                      # case placement.classify_point point
+                      # when outside, on_edge, on_vertex
+                      #   # All good.
+                      # else
+                      #   puts "g"
+                        all_match = false
+                        break
+                      end
+                      # if not all_match
+                      #   break
+                      # end
+                    end
+                    if not all_match
+                      break
+                    end
+                  end
+                  # Check the inverse vertices.
+                  if all_match
+                    inner_mapped = inner.map { |point| transform * point }
+                    testface = temp_faces.add_face inner_mapped
+                    placed_i.each do |placement|
+                      placement.vertices.each do |v|
+                        if testface.classify_point(v.position) != outside
+                          all_match = false
+                          break
+                        end
+                      end
+                      if not all_match
+                        break
+                      end
+                    end
+                    temp_faces.clear!
+                  end
+                  # If the vertices don't overlap, check that the edges don't
+                  # intersect.
+                  if nil # all_match
+                    # TODO(tav): Optimise with a sweep line algorithm variant:
+                    # http://en.wikipedia.org/wiki/Sweep_line_algorithm
+                    for i in 0...outer.length
+                      p1 = outer_mapped[i]
+                      p2 = outer_mapped[i+1]
+                      if not p2
+                        p2 = inner[0]
+                      end
+                      p1x, p1y = p1.x, p1.y
+                      p2x, p2y = p2.x, p2.y
+                      s1 = p2x - p1x
+                      s2 = p2y - p1y
+                      edge = [p1, [s1, s2, 0]]
+                      edge_length = Math.sqrt((s1 * s1) + (s2 * s2))
+                      p edge_length
+                      placed_i.each do |placement|
+                        placement.edges.each do |other_edge|
+                          intersection = Geom.intersect_line_line edge, other_edge.line
+                          if intersection
+                            p intersection
+                            p3x, p3y = intersection.x, intersection.y
+                            s1 = p3x - p1x
+                            s2 = p3y - p1y
+                            length = Math.sqrt((s1 * s1) + (s2 * s2))
+                            if (length - edge_length).abs < 5
+                              puts "next"
+                              next
+                            end
+                            s1 = p3x - p2x
+                            s2 = p3y - p2y
+                            length = Math.sqrt((s1 * s1) + (s2 * s2))
+                            if (length - edge_length).abs < 5
+                              puts "next"
+                              next
+                            end
+                            # p [(length - edge_length), length, edge_length]
+                            puts "nope"
+                            all_match = false
+                            break
+                          end
+                        end
+                        if not all_match
+                          break
+                        end
+                      end
+                      if not all_match
+                        break
+                      end
+                    end
+                  end
+                  if all_match
+                    match = true
+                    t = transform
+                    used = [inner, outer]
+                  end
+                  p_idx -= 1
+                  if match
+                    break
+                  end
+                end
+                if match
+                  break
+                end
+              end
+              if match
+                break
+              end
+            end
+            if match
+              break
+            end
           end
         end
 
-        newcircles = circles.map do |circle|
-          if circle
-            center = t * circle[0]
-            center = [center.x, -center.y, 0]
-            [center, circle[1]]
-          else
-            nil
-          end
-        end
+        if match
 
-        x += width
-        sheet << [newloops, newcircles]
+          # p ["match", available, panel_area]
+          # p (available[0][0].outer_loop.vertices.map {|v| v.position})
+          # puts "/"
+          # p (used_outline.map {|p| t * p})
+          # puts "======"
+
+          # total_before = available.inject(0) { |result, a| result + a[1]}
+
+          # Remove the outline from the sheet.
+          # hole = sheet_entities.add_face(used_outline.map { |p| t * p })
+          # hole.erase! # if hole.valid?
+
+          inner, outer = used
+
+          outer_face = inner_faces.add_face(inner.map { |p| t * p })
+          outer_face = outer_faces.add_face(outer.map { |p| t * p })
+
+          placed_i = inner_faces.select { |e| e.typename == "Face" }
+          placed_o = outer_faces.select { |e| e.typename == "Face" }
+
+          # p [available_area, panel_area]
+          # p placed.map { |p| p.area }
+          available_area -= panel_area
+
+          # ori_available = available
+
+          # # Update the available regions.
+          # available = []
+          # # available_loops = []
+          # sheet_entities.each do |entity|
+          #   if entity.typename == "Face"
+          #     # Skip ones with holes in them.
+          #     if entity.loops.length != 1
+          #       next
+          #     end
+          #     # And only include the ones which aren't too small.
+          #     area = entity.area
+          #     if area > 50
+          #       # available_loops << entity.outer_loop.vertices.map { |v| v.position }
+          #       available << [entity, area]
+          #     end
+          #   end
+          # end
+
+          # total_after = available.inject(0) { |result, a| result + a[1] }
+
+          # if (panel_area - (total_before - total_after).abs).abs > 1
+          #   p [total_before, total_after]
+          #   panels = []
+          #   available = []
+          #   idx += 1
+          #   next
+          # end
+
+          # puts "</matched>"
+
+          # if c == 20
+          #   panels = []
+          #   next
+          # end
+
+          # available = []
+          # sheet_entities.clear!
+          # available_loops.each do |loop|
+          #   region = sheet_entities.add_face loop
+          #   available << [region, region.area]
+          # end
+
+          # Sort the available regions in descending area size.
+          # available = available.sort_by { |d| d[1] }.reverse
+
+          # Generate the new loop vertices.
+          loops = panel.loops.map do |loop|
+            loop.map do |point|
+              t * point
+            end
+          end
+
+          # Generate the new circle data.
+          circles = panel.circles.map do |circle|
+            if circle
+              center = t * circle[0]
+              [center, circle[1]]
+            else
+              nil
+            end
+          end
+
+          # Generate the new centroid.
+          centroid = t * panel.centroid
+
+          # Get the label.
+          label = labels.pop
+
+          # If this was the last label, remove the panel.
+          if labels.length == 0
+            panels.delete_at idx
+          end
+
+          # Append the generated data to the current sheet.
+          sheet << [loops, circles, centroid, label]
+          c += 1
+
+        else
+
+          # We do not have a match, try the next panel.
+          idx += 1
+
+        end
 
       end
 
+      # If no panels could be fitted, break so as to avoid an infinite loop.
+      if sheet.length == 0
+        break
+      end
+
+      # Add the sheet to the collection.
+      sheets << sheet
+
+      #if sheets.length == 3
+      #  break
+      #end
+
+      # If there are no more panels remaining, exit the loop.
+      if panels.length == 0
+        break
+      end
+
+      # Wipe the generated entities.
+      inner_faces.clear!
+      outer_faces.clear!
+
     end
 
-    # TODO(tav): Do the proper optimising layout.
-    while 1
-      break
-    end
+    # Delete the generated sheet group.
+    root.erase_entities [inner_group, outer_group]
+
+    # # Layout the panels horizontally onto sheets.
+    # panels.each do |panel, outlines, area, labels|
+
+    #   circles = panel.circles
+    #   loops = panel.loops
+
+    #   # NOTE(tav): We assume that the width will always be greater than the
+    #   # height.
+
+    #   # Sanity check the panel width and height against the sheet dimensions.
+    #   if width > inner_width
+    #     p [width.to_mm, height.to_mm]
+    #     p panel.singleton
+    #     puts "Panel is wider than the sheet width!"
+    #     next
+    #   end
+    #   if height > inner_height
+    #     if height > inner_width
+    #       puts "Panel is larger than the sheet width/height!"
+    #       next
+    #     end
+    #     # Rotate the panel by 90 degrees.
+    #     width, height = height, width
+    #     transform = Geom::Transformation.rotation ORIGIN, Z_AXIS, 90.degrees
+    #     origin = transform * region[1]
+    #     puts "rotated"
+    #   end
+
+    #   for i in 0...panel.labels.length
+
+    #     Sketchup.set_status_text WIKIHOUSE_LAYOUT_STATUS[(loop_count/10) % 5]
+    #     loop_count += 1
+
+    #     remx = inner_width - x
+
+    #     # If there's no horizontal space left on the current sheet, generate a
+    #     # new sheet.
+    #     if width > remx
+    #       sheet = []
+    #       sheets << sheet
+    #       x = y = 0
+    #     end
+
+    #     trans = [x - origin[0], y - origin[1], 0]
+    #     t = Geom::Transformation.translation trans
+    #     t = transform * t
+
+    #     # outer_loop = true
+    #     newloops = loops.map do |loop|
+    #       # skip circles
+    #       loop.map do |point|
+    #         newpoint = t * point
+    #         # if outer_loop
+    #         #   px, py = newpoint[0], newpoint[1]
+    #         #   if px > x
+    #         #     x = px
+    #         #   end
+    #         #   #if py > y
+    #         #   #  y = py
+    #         #   #end
+    #         # end
+    #         [newpoint.x, -newpoint.y, 0]
+    #       end
+    #     end
+
+    #     newcircles = circles.map do |circle|
+    #       if circle
+    #         center = t * circle[0]
+    #         center = [center.x, -center.y, 0]
+    #         [center, circle[1]]
+    #       else
+    #         nil
+    #       end
+    #     end
+
+    #     x += width
+    #     sheet << [newloops, newcircles]
+    #     if panel.no_padding
+    #       puts sheets.length
+    #     end
+
+    #   end
+
+    # end
 
   end
 
@@ -594,13 +981,14 @@ end
 class WikiHousePanel
 
   attr_accessor :area, :centroid, :circles, :labels, :loops, :max, :min
-  attr_reader :bounds_area, :error, :shell_area, :singleton
+  attr_reader :bounds_area, :error, :no_padding, :shell_area, :singleton
 
   def initialize(root, face, transform, labels, limits)
 
     # Initalise some of the object attributes.
     @error = nil
     @labels = labels
+    @no_padding = false
     @singleton = false
 
     # Initialise a variable to hold temporarily generated entities.
@@ -800,7 +1188,7 @@ class WikiHousePanel
     outer = loops[0]
 
     # Unpack panel dimension limits.
-    panel_height, panel_width, panel_max_height, panel_max_width = limits
+    panel_height, panel_width, panel_max_height, panel_max_width, padding = limits
 
     # Try rotating at half degree intervals and find the transformation which
     # occupies the most minimal bounding rectangle.
@@ -828,10 +1216,8 @@ class WikiHousePanel
       end
     end
     
-    # If we couldn't find a fitting angle, set the panel to a singleton panel
-    # (i.e. without any padding) and try again at 0.1 degree intervals.
+    # If we couldn't find a fitting angle, try again at 0.1 degree intervals.
     if not transform
-      @singleton = true
       (0...180.0).step(0.1) do |angle|
         t = Geom::Transformation.rotation ORIGIN, Z_AXIS, angle.degrees
         bounds = Geom::BoundingBox.new
@@ -862,6 +1248,22 @@ class WikiHousePanel
       @error = "Couldn't fit panel within cutting sheet"
       puts @error
       return
+    end
+
+    # Set the panel to a singleton panel (i.e. without any padding) if it is
+    # larger than the height and width, otherwise set the no_padding flag.
+    width = bounds_max.x - bounds_min.x
+    height = bounds_max.y - bounds_min.y
+    if (width + padding) > panel_width
+      @no_padding = 'w'
+    end
+    if (height + padding) > panel_height
+      if @no_padding
+        @singleton = true
+        @no_padding = nil
+      else
+        @no_padding = 'h'
+      end
     end
 
     # Transform all points on every loop.
@@ -1003,7 +1405,7 @@ class WikiHouseEntities
     # Construct the panel limit dimensions.
     height, width, padding = [dimensions[2], dimensions[3], dimensions[5]]
     padding = 2 * padding
-    limits = [height - padding, width - padding, height, width]
+    limits = [height - padding, width - padding, height, width, padding]
 
     # Loop through each group and aggregate parsed data for the faces.
     @panels = items = []
