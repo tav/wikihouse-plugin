@@ -386,7 +386,7 @@ class WikiHouseSVG
       base_x += scale * margin
       base_y += scale * margin
 
-      sheet.each do |loops, circles|
+      sheet.each do |loops, circles, outer_mapped, centroid, label|
 
         Sketchup.set_status_text WIKIHOUSE_SVG_STATUS[(loop_count/5) % 5]
         loop_count += 1
@@ -417,6 +417,12 @@ class WikiHouseSVG
               <path d="#{path.join ' '}" stroke="rgb(0, 0, 0)" stroke-width="2" fill="none" />
               PATH
           end
+        end
+
+        if label and label != ""
+          svg << <<-LABEL.gsub(/^ {12}/, '')
+            <text x="#{(scale * centroid.x) + base_x}" y="#{(scale * centroid.y) + base_y}" style="font-size: 5mm; stroke: rgb(255, 0, 0); fill: rgb(255, 0, 0); text-family: monospace">#{label}</text>
+            LABEL
         end
 
         svg << '</g>'
@@ -558,7 +564,7 @@ class WikiHouseLayoutEngine
 
       while available_area > 0
 
-        Sketchup.set_status_text WIKIHOUSE_LAYOUT_STATUS[(loop_count/10) % 5]
+        Sketchup.set_status_text WIKIHOUSE_LAYOUT_STATUS[(loop_count/20) % 5]
         loop_count += 1
 
         panel_data = panels[idx]
