@@ -156,6 +156,8 @@ end
 # Centroid Calculation
 # ------------------------------------------------------------------------------
 
+# (Chris) Dont think this function is currently being used 
+
 def get_face_center(face)
 
   # First, triangulate the polygon.
@@ -622,7 +624,7 @@ class WikiHouseLayoutEngine
                   if not p0
                     break
                   end
-                  transform = Geom::Transformation.translation ([origin.x - p0[0], origin.y - p0[1], 0])
+                  transform = Geom::Transformation.translation([origin.x - p0[0], origin.y - p0[1], 0])
                   if angle
                     transform = transform * Geom::Transformation.rotation(origin, Z_AXIS, angle)
                   end
@@ -1900,7 +1902,7 @@ def load_wikihouse_make
     show_wikihouse_error "You need to open a SketchUp model before it can be fabricated"
     return
   end
-
+  
   # Initialise an attribute dictionary for custom metadata.
   attr = model.attribute_dictionary WIKIHOUSE_TITLE, true
   if attr.size == 0
