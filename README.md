@@ -9,8 +9,19 @@ you can:
 
 **Installation**
 
-To install, simply download the zip file and copy over the files into  
-your SketchUp `plugins` directory.
+The Wikihouse plugin is now available as a SketchUp 8 extension, which allow easier installing and managing of SketchUp plugins.
+
+To install:
+
+1.  Download the file `wikihouseExtension.rbz`
+2.  Open SketchUp and navigate to **Window** > **Preferences** (Microsoft Windows) or **SketchUp** > **Preferences** (Mac OS X).
+3.  Click on Extensions, which will display the Extensions panel showing all current extensions in your plugin folder. 
+4.  Click on the *Install Extension* button and locate the downloaded `wikihouseExtension.rbz` file to install it.
+
+The plugin will then appear in the list of other extensions, and all necessary files will be copied to your plugins folder. If you ever wish to disable it, simply untick it in the list and restart SketchUp. 
+
+On previous versions of SketchUp to install, simply download the zip file and copy over the files into  
+your SketchUp `plugins` directory. 
 
 **License**
 
