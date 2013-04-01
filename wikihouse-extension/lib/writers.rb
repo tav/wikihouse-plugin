@@ -42,13 +42,13 @@ module WikihouseExtension
       total_width = scale * (sheet_width + (margin * 2))
   
       svg = []
-      svg << <<-HEADER.gsub(/^ {6}/, '')
+      svg << <<-HEADER.gsub(/^\s+/, '')
         <?xml version="1.0" standalone="no"?>
         <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
         <svg height="#{total_height}" version="1.1"
              viewBox="0 0 #{total_width} #{total_height}" xmlns="http://www.w3.org/2000/svg"
              xmlns:xlink="http://www.w3.org/1999/xlink" style="background-color: #ffffff;">
-        <desc>#{WIKIHOUSE_TITLE} Cutting Sheets</desc>"
+         <desc>#{WIKIHOUSE_TITLE} Cutting Sheets</desc>"
         <!-- linkstart -->
         <g visibility="hidden" pointer-events="all">
           <rect x="0" y="0" width="100%" height="100%" fill="none" />
@@ -82,7 +82,7 @@ module WikihouseExtension
               x = (scale * center.x) + base_x
               y = (scale * center.y) + base_y
               radius = scale * radius
-              svg << <<-CIRCLE.gsub(/^ {14}/, '')
+              svg << <<-CIRCLE.gsub(/^\s+/, '')
                 <circle cx="#{x}" cy="#{y}" r="#{radius}"
                         stroke="rgb(51, 51, 51)" stroke-width="2" fill="none" />
                 CIRCLE
@@ -95,14 +95,14 @@ module WikihouseExtension
                 path << "L #{(scale * point.x) + base_x} #{(scale * point.y) + base_y}"
               end
               path << "Z"
-              svg << <<-PATH.gsub(/^ {14}/, '')
+              svg << <<-PATH.gsub(/^\s+/, '')
                 <path d="#{path.join ' '}" stroke="rgb(0, 0, 0)" stroke-width="2" fill="none" />
                 PATH
             end
           end
   
           if label and label != ""
-            svg << <<-LABEL.gsub(/^ {12}/, '')
+            svg << <<-LABEL.gsub(/^\s+/, '')
               <text x="#{(scale * centroid.x) + base_x}" y="#{(scale * centroid.y) + base_y}" style="font-size: 5mm; stroke: rgb(255, 0, 0); fill: rgb(255, 0, 0); text-family: monospace">#{label}</text>
               LABEL
           end
