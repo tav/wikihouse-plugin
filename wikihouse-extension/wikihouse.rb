@@ -1658,9 +1658,9 @@ end
 # ------------------------------------------------------------------------------
 # Set Globals
 # ------------------------------------------------------------------------------
-# This section is run only once and sets up the Extension menue items and tool buttons.
-# It in not part of module named WIkihouse Extension, so methods etc. must be included/extended in to it 
-
+# This section is run only once and sets up the Extension menu items and tool buttons.
+# It in not part of module named WIkihouseExtension, so methods etc. must be referenced with 
+# WikihouseExtension::name, where name is the name of the method, constant or class.
 
 if not file_loaded? __FILE__
 
@@ -1744,6 +1744,17 @@ if not file_loaded? __FILE__
     puts ""
     puts "#{WikihouseExtension::WIKIHOUSE_TITLE} Extension Successfully Loaded."
     puts ""
+    
+    # Interactive utilities
+    def mod
+      return Sketchup.active_model # Open model
+    end
+    def ent
+      return Sketchup.active_model.entities # All entities in model
+    end
+    def sel 
+      return Sketchup.active_model.selection # Current selection
+    end
   end
 
   file_loaded __FILE__

@@ -21,6 +21,11 @@ module WikihouseExtension
    # ------------------------------------------------------------------------------
    
   class WikiHouseSVG
+    
+    # May reformat with multiline string in this format:
+    #   string = "line #1"\
+    #            "line #2"\
+    #            "line #3"
   
     def initialize(layout, scale)
       @layout = layout
@@ -54,6 +59,18 @@ module WikihouseExtension
           <rect x="0" y="0" width="100%" height="100%" fill="none" />
         </g>
         HEADER
+  
+#      svg << %[<?xml version="1.0" standalone="no"?>\n] \
+#             %[<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n] \
+#             %["<svg height="#{total_height}" version="1.1"\n] \
+#             %[viewBox="0 0 #{total_width} #{total_height}" xmlns="http://www.w3.org/2000/svg"\n] \
+#             %[xmlns:xlink="http://www.w3.org/1999/xlink" style="background-color: #ffffff;">\n]
+#         <desc>#{WIKIHOUSE_TITLE} Cutting Sheets</desc>"
+#        <!-- linkstart -->
+#        <g visibility="hidden" pointer-events="all">
+#          <rect x="0" y="0" width="100%" height="100%" fill="none" />
+#        </g>
+#        HEADER
   
       loop_count = 0
   
