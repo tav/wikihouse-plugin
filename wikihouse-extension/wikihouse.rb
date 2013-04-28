@@ -1175,7 +1175,7 @@ module WikihouseExtension # Top Level Namespace
       entities = selection
     end
   
-    dimensions = WIKIHOUSE_DIMENSIONS
+    dimensions = @@wikihouse_dimensions
   
     # Load and parse the entities.
     if WIKIHOUSE_SHORT_CIRCUIT and $wikloader
@@ -1437,6 +1437,128 @@ module WikihouseExtension # Top Level Namespace
   
   end
   
+  
+  # ------------------------------------------------------------------------------
+  # Configure Dialog
+  # ------------------------------------------------------------------------------
+#def load_wikihouse_settings
+#  my_dialog = UI::WebDialog.new("Selection Info", false, "Selection Info", 200, 200, 200, 200, true)
+#  
+#  # Attach an action callback
+#  my_dialog.add_action_callback("get_data") do |web_dialog,action_name|
+#  UI.messagebox("Ruby says: Your javascript has asked for " + action_name.to_s)
+#  end
+#  
+#  # Find and show our html file
+#  html_path = Sketchup.find_support_file "selectionInfo.html" ,"Plugins/cm"
+#  my_dialog.set_file(html_path)
+#  my_dialog.show()
+#end  
+#  
+  
+  
+def load_wikihouse_settings
+    
+    # Create WebDialog
+    dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, "#{WIKIHOUSE_TITLE}-Settings", 480, 640, 150, 150, true
+    
+    # Get Current Wikihouse Settings
+    dialog.add_action_callback("fetch_settings") do |d, args| 
+       
+       if args == "default"
+         
+          # Convert Dimenstions to mm
+          dims = {}
+          for k, v in DEFAULT_SETTINGS
+            dims[k] = v.to_mm 
+          end
+          script = "recieve_wikihouse_settings('" + JSON.to_json(dims) + "');"
+          d.execute_script(script)
+       
+       elsif args == "current"
+       
+         # Convert Dimenstions to mm
+         dims = {}
+         for k, v in @@wikihouse_settings
+           dims[k] = v.to_mm 
+         end
+         script = "recieve_wikihouse_settings('" + JSON.to_json(dims) + "');"
+         d.execute_script(script)
+         
+       end
+     end
+    
+    
+    # Set Web Dialog's Callbacks
+    dialog.add_action_callback("update_settings") do |d, args|
+      
+      if args == nil 
+        UI.messagebox("Some arguments are empty!") 
+      else
+        args = args.split(", ")
+        if args[0] != ""
+          @@wikihouse_dimensions[0] = eval(args[0] + ".mm")
+        end
+        if args[1] != ""
+          @@wikihouse_dimensions[1] = eval(args[1] + ".mm")
+        end
+        if args[4] != ""
+          @@wikihouse_dimensions[4] = eval(args[2] + ".mm")
+        end
+        if args[5] != ""
+          @@wikihouse_dimensions[5] = eval(args[3] + ".mm")
+        end
+        if args[6] != ""
+          @@wikihouse_dimensions[6] = eval(args[4] + ".mm")
+        end
+        
+        # Recalculate inner hieghts and widths
+        @@wikihouse_dimensions[2] = @@wikihouse_dimensions[0] - (2 * @@wikihouse_dimensions[4])
+        @@wikihouse_dimensions[3] = @@wikihouse_dimensions[1] - (2 * @@wikihouse_dimensions[4])
+        
+        puts "Dimensions Updated"
+        
+        if args[-1] == 'close'
+          d.close
+        else
+          d.execute_script("display_status(" + "Settings Updated!" + ");")
+          end
+      end              
+    end  
+    
+    
+    # Cancel and close dialog
+    dialog.add_action_callback("cancel_settings") { |d, args| 
+      d.close }
+    
+    # Set HTML  
+    html_path = Sketchup.find_support_file "settings.html", "Plugins/wikihouse-extension/lib/"
+    dialog.set_file html_path
+    dialog.show_modal
+#    dialog.bring_to_front
+#    dialog.show
+    
+    puts dialog.visible?
+        
+    puts "Dialog Loaded"
+    
+end
+
+#Code: Select all
+#myWebDialog.add_action_callback('act_on_form_data') { |wd, params|
+#  field1 = wd.get_element_value('my_form_field_1')
+#  # Now do something with it...
+#}
+#
+#
+#And in JS:
+#
+#
+#Code: Select all
+#$('#mySubmitButton').click(function() { window.location.href = 'skp:act_on_form_data@'; });
+#
+#Also make sure to do this after DOM has loaded using $(document).ready(function() {});
+
   # ------------------------------------------------------------------------------
   # Download Dialog
   # ------------------------------------------------------------------------------
@@ -1664,7 +1786,7 @@ end
 
 if not file_loaded? __FILE__
 
-  WIKIHOUSE_DIR = File.join File.dirname(__FILE__), "wikihouse-assets"
+  WIKIHOUSE_ASSETS = File.join File.dirname(__FILE__), "wikihouse-assets"
 
   # Initialise the data containers.
   WIKIHOUSE_DOWNLOADS = Hash.new
@@ -1679,8 +1801,8 @@ if not file_loaded? __FILE__
   end
   
   WIKIHOUSE_DOWNLOAD.tooltip = "Find new models to use at #{WikihouseExtension::WIKIHOUSE_TITLE}"
-  WIKIHOUSE_DOWNLOAD.small_icon = File.join WIKIHOUSE_DIR, "download-16.png"
-  WIKIHOUSE_DOWNLOAD.large_icon = File.join WIKIHOUSE_DIR, "download.png"
+  WIKIHOUSE_DOWNLOAD.small_icon = File.join WIKIHOUSE_ASSETS, "download-16.png"
+  WIKIHOUSE_DOWNLOAD.large_icon = File.join WIKIHOUSE_ASSETS, "download.png"
 
   # TODO(tav): Irregardless of these procs, all commands seem to get greyed out
   # when no models are open -- at least, on OS X.
@@ -1693,8 +1815,8 @@ if not file_loaded? __FILE__
   end
 
   WIKIHOUSE_MAKE.tooltip = "Convert a model of a House into printable components"
-  WIKIHOUSE_MAKE.small_icon = File.join WIKIHOUSE_DIR, "make-16.png"
-  WIKIHOUSE_MAKE.large_icon = File.join WIKIHOUSE_DIR, "make.png"
+  WIKIHOUSE_MAKE.small_icon = File.join WIKIHOUSE_ASSETS, "make-16.png"
+  WIKIHOUSE_MAKE.large_icon = File.join WIKIHOUSE_ASSETS, "make.png"
   WIKIHOUSE_MAKE.set_validation_proc {
     if Sketchup.active_model
       MF_ENABLED
@@ -1708,8 +1830,8 @@ if not file_loaded? __FILE__
   end
 
   WIKIHOUSE_UPLOAD.tooltip = "Upload and share your model at #{WikihouseExtension::WIKIHOUSE_TITLE}"
-  WIKIHOUSE_UPLOAD.small_icon = File.join WIKIHOUSE_DIR, "upload-16.png"
-  WIKIHOUSE_UPLOAD.large_icon = File.join WIKIHOUSE_DIR, "upload.png"
+  WIKIHOUSE_UPLOAD.small_icon = File.join WIKIHOUSE_ASSETS, "upload-16.png"
+  WIKIHOUSE_UPLOAD.large_icon = File.join WIKIHOUSE_ASSETS, "upload.png"
   WIKIHOUSE_UPLOAD.set_validation_proc {
     if Sketchup.active_model
       MF_ENABLED
@@ -1717,12 +1839,25 @@ if not file_loaded? __FILE__
       MF_DISABLED|MF_GRAYED
     end
   }
+  
+  WIKIHOUSE_SETTINGS = UI::Command.new "Settings..." do
+  WikihouseExtension::load_wikihouse_settings
+  end
+
+  WIKIHOUSE_SETTINGS.tooltip = "Change #{WikihouseExtension::WIKIHOUSE_TITLE} settings"
+  WIKIHOUSE_SETTINGS.small_icon = File.join WIKIHOUSE_ASSETS, "cog-16.png"
+  WIKIHOUSE_SETTINGS.large_icon = File.join WIKIHOUSE_ASSETS, "cog.png"
+  WIKIHOUSE_SETTINGS.set_validation_proc {
+    MF_ENABLED
+    }
+  
 
   # Register a new toolbar with the commands.
   WIKIHOUSE_TOOLBAR = UI::Toolbar.new WikihouseExtension::WIKIHOUSE_TITLE
   WIKIHOUSE_TOOLBAR.add_item WIKIHOUSE_DOWNLOAD
   WIKIHOUSE_TOOLBAR.add_item WIKIHOUSE_UPLOAD
   WIKIHOUSE_TOOLBAR.add_item WIKIHOUSE_MAKE
+  WIKIHOUSE_TOOLBAR.add_item WIKIHOUSE_SETTINGS
   WIKIHOUSE_TOOLBAR.show
 
   # Register a new submenu of the standard Plugins menu with the commands.
@@ -1730,6 +1865,7 @@ if not file_loaded? __FILE__
   WIKIHOUSE_MENU.add_item WIKIHOUSE_DOWNLOAD
   WIKIHOUSE_MENU.add_item WIKIHOUSE_UPLOAD
   WIKIHOUSE_MENU.add_item WIKIHOUSE_MAKE
+  WIKIHOUSE_MENU.add_item WIKIHOUSE_SETTINGS
 
   # Add our custom AppObserver.
   Sketchup.add_observer WikihouseExtension::WikiHouseAppObserver.new
@@ -1737,6 +1873,9 @@ if not file_loaded? __FILE__
   # Display the Ruby Console in dev mode.
   if WikihouseExtension::WIKIHOUSE_DEV
     Sketchup.send_action "showRubyPanel:"
+    
+    WE = WikihouseExtension
+    S = WE::settings
     
     def w
       load "wikihouse.rb"
@@ -1761,6 +1900,7 @@ if not file_loaded? __FILE__
 
 end
 
+
 #def test
 #  load "wikihouse.rb"
 #  puts
@@ -1774,4 +1914,3 @@ end
 #    end
 #    "Sheets generated!"
 #  end
-#end
