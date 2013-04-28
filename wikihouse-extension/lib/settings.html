@@ -1,39 +1,40 @@
 <!DOCTYPE html>
 <html>
-   <head>
-      <script type="text/javascript" src="settings.js" > </script>      
-   </head>
+<head>
+<script type="text/javascript" src="settings.js"> </script>
+</head>
 <body>
 
-	<h1>Wikihouse Options</h1> <br/>
-
-	<h3>Sheet Settings</h3><br/>
-
-Sheet Height: <input type="text" id="sheet_height" size="10"/> mm<br/> 
-Sheet Width: <input type="text" id="sheet_width" size="10"/> mm<br/>
-<!--These are the outer dimensions of the plywood sheet used. Common sizes are 1200mm x 2400mm
-and 1220mm by 2440mm. -->
-  <br/>
-Sheet Margin: <input type="text" id="margin" size="10"/> mm<br/>
-<!--This is the outer margin left clear of any parts for the cutting templates generated.-->
-<br/>
-Sheet Padding: <input type="text" id="padding" size="10"/> mm<br/>
-<!--This is the minimum amount of distance between two parts. (Usage still in development) -->
-<br/>
-Font Height: <input type="text" id="font_height" size="10"/> mm<br/>
-<!--This is the height of the font used to mark the templates. (Usage still in development) -->
-<br/>
-<br/>
-<!-- Send points to JavaScript -->
-<input type="button" onclick="fetch_settings('default');" value="Get Defaults" /> 
-<input type="button" onclick="cancel();" value="Cancel" />
-<input type="button" onclick="send_wikihouse_settings(0);" value="Apply" />
-<input type="button" onclick="send_wikihouse_settings(1);"  value="Ok" />
-<br/>
-<h4 id="status_out"></h4>
-
-<br/>
+	<h2>Wikihouse Options</h2>
+	<p>Note: All measurements must be specified in milimeters.</p>
+	<h4>Sheet Settings</h4>
+	Sheet Height:
+	<input type="text" id="sheet_height" size="10" /> mm
+	<br> Sheet Width: 
+	<input type="text" id="sheet_width" size="10" /> mm
+	<p>Outer dimensions of the plywood sheet used.</p>
+	<br> Sheet Margin:
+	<input type="text" id="margin" size="10" /> mm
+	<p>This is the outer margin left clear of any parts for the cutting templates generated. </p>
+	<br> Sheet Padding:
+	<input type="text" id="padding" size="10" /> mm
+	<p>This is the minimum amount of distance between two parts. <br>
+	(Usage still in development)</p>
+	<br> Font Height:
+	<input type="text" id="font_height" size="10" /> mm
+	<p>This is the height of the font used to mark the templates. <br>
+	(Usage still in development) </p>
+	<!-- Send points to JavaScript -->
+	<input type="button" onclick="fetch_settings('default');"
+		value="Get Defaults" />
+	<input type="button" onclick="cancel();" value="Close" />
+	<input type="button" onclick="send_wikihouse_settings(0);"
+		value="Apply" />
+	<input type="button" onclick="send_wikihouse_settings(1);" value="Ok" />
+	<h4 id="status_out"></h4>
+	<!-- For Debugging  
 <input type="button" onclick="do_stuff();"  value="Do Stuff" />
+-->
 
 </body>
 </html>

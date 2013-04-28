@@ -59,18 +59,7 @@ module WikihouseExtension
   wikihouse_sheet_inner_height = wikihouse_sheet_height - (2 * wikihouse_sheet_margin)
   wikihouse_sheet_inner_width = wikihouse_sheet_width - (2 * wikihouse_sheet_margin)
   
-  @@wikihouse_dimensions = [
-    wikihouse_sheet_height,
-    wikihouse_sheet_width,
-    wikihouse_sheet_inner_height,
-    wikihouse_sheet_inner_width,
-    wikihouse_sheet_margin,
-    wihihouse_panel_padding,
-    wikihouse_font_height
-  ]
-
   #(Chris) Plan to eventually store all setting as a hash. 
-  #        Duplication exists for now to ensure code compatability.
   
   # Store the actual values as length objects (in inches)
   @@wikihouse_settings = {

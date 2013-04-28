@@ -1175,7 +1175,15 @@ module WikihouseExtension # Top Level Namespace
       entities = selection
     end
   
-    dimensions = @@wikihouse_dimensions
+    dimensions = [
+          @@wikihouse_settings["sheet_height"],
+          @@wikihouse_settings["sheet_width"],
+          @@wikihouse_settings["sheet_inner_height"],
+          @@wikihouse_settings["sheet_inner_width"],
+          @@wikihouse_settings["margin"],
+          @@wikihouse_settings["padding"],
+          @@wikihouse_settings["font_height"]
+        ]
   
     # Load and parse the entities.
     if WIKIHOUSE_SHORT_CIRCUIT and $wikloader
@@ -1441,35 +1449,20 @@ module WikihouseExtension # Top Level Namespace
   # ------------------------------------------------------------------------------
   # Configure Dialog
   # ------------------------------------------------------------------------------
-#def load_wikihouse_settings
-#  my_dialog = UI::WebDialog.new("Selection Info", false, "Selection Info", 200, 200, 200, 200, true)
-#  
-#  # Attach an action callback
-#  my_dialog.add_action_callback("get_data") do |web_dialog,action_name|
-#  UI.messagebox("Ruby says: Your javascript has asked for " + action_name.to_s)
-#  end
-#  
-#  # Find and show our html file
-#  html_path = Sketchup.find_support_file "selectionInfo.html" ,"Plugins/cm"
-#  my_dialog.set_file(html_path)
-#  my_dialog.show()
-#end  
-#  
-  
   
 def load_wikihouse_settings
     
     # Create WebDialog
-    dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, "#{WIKIHOUSE_TITLE}-Settings", 480, 640, 150, 150, true
+    dialog = UI::WebDialog.new WIKIHOUSE_TITLE, true, "#{WIKIHOUSE_TITLE}-Settings", 480, 660, 150, 150, true
     
     # Get Current Wikihouse Settings
-    dialog.add_action_callback("fetch_settings") do |d, args| 
+    dialog.add_action_callback("fetch_settings") { |d, args| 
        
        if args == "default"
          
           # Convert Dimenstions to mm
           dims = {}
-          for k, v in DEFAULT_SETTINGS
+          for k, v in DEFAULT_SETTINGS do
             dims[k] = v.to_mm 
           end
           script = "recieve_wikihouse_settings('" + JSON.to_json(dims) + "');"
@@ -1479,54 +1472,45 @@ def load_wikihouse_settings
        
          # Convert Dimenstions to mm
          dims = {}
-         for k, v in @@wikihouse_settings
+         for k, v in @@wikihouse_settings do
            dims[k] = v.to_mm 
          end
          script = "recieve_wikihouse_settings('" + JSON.to_json(dims) + "');"
          d.execute_script(script)
-         
        end
-     end
-    
-    
+     }
+         
     # Set Web Dialog's Callbacks
-    dialog.add_action_callback("update_settings") do |d, args|
+    dialog.add_action_callback("update_settings") { |d, args|
+            
+      close_flag = false
+      if args.include? "--close"
+        close_flag = true
+        args = args.gsub("--close", "")
+      end
       
-      if args == nil 
-        UI.messagebox("Some arguments are empty!") 
+#      UI.messagebox("Passed Arguments = #{args}") 
+
+      new_settings = JSON.from_json(args)
+      
+      for k,v in new_settings do
+        # Convert mm back to inches
+        @@wikihouse_settings[k] = v.mm
+      end
+      
+      # Recalculate inner heights and widths
+      @@wikihouse_settings["sheet_inner_height"] = @@wikihouse_settings["sheet_height"] - (2 * @@wikihouse_settings["margin"])
+      @@wikihouse_settings["sheet_inner_width"] = @@wikihouse_settings["sheet_width"] - (2 * @@wikihouse_settings["margin"])
+        
+      puts "Dimensions Updated!"
+        
+      if close_flag == true
+        d.close
       else
-        args = args.split(", ")
-        if args[0] != ""
-          @@wikihouse_dimensions[0] = eval(args[0] + ".mm")
-        end
-        if args[1] != ""
-          @@wikihouse_dimensions[1] = eval(args[1] + ".mm")
-        end
-        if args[4] != ""
-          @@wikihouse_dimensions[4] = eval(args[2] + ".mm")
-        end
-        if args[5] != ""
-          @@wikihouse_dimensions[5] = eval(args[3] + ".mm")
-        end
-        if args[6] != ""
-          @@wikihouse_dimensions[6] = eval(args[4] + ".mm")
-        end
-        
-        # Recalculate inner hieghts and widths
-        @@wikihouse_dimensions[2] = @@wikihouse_dimensions[0] - (2 * @@wikihouse_dimensions[4])
-        @@wikihouse_dimensions[3] = @@wikihouse_dimensions[1] - (2 * @@wikihouse_dimensions[4])
-        
-        puts "Dimensions Updated"
-        
-        if args[-1] == 'close'
-          d.close
-        else
-          d.execute_script("display_status(" + "Settings Updated!" + ");")
-          end
-      end              
-    end  
-    
-    
+        d.execute_script("display_status('" + "Settings Updated!" + "');")
+      end
+     }
+     
     # Cancel and close dialog
     dialog.add_action_callback("cancel_settings") { |d, args| 
       d.close }
@@ -1538,8 +1522,6 @@ def load_wikihouse_settings
 #    dialog.bring_to_front
 #    dialog.show
     
-    puts dialog.visible?
-        
     puts "Dialog Loaded"
     
 end

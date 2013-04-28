@@ -41,21 +41,22 @@ function recieve_wikihouse_settings(args) {
 // Update Settings 
 function send_wikihouse_settings(mode) {
   
-  var ids = new Array("sheet_height", "sheet_width", "sheet_margin",
-    "sheet_padding", "font_height");
+	
+  var fields = new Array("sheet_height", "sheet_width", "margin",
+    "padding", "font_height");
   
-  var value, args;  
+  var idx, value, args;  
 
-  for (field in ids) {
+  for (idx in fields) {
 	  
-	  value = document.getElementById(field).value
-	  alert(typeof value)
+	  value = eval(document.getElementById(fields[idx]).value)
 	  
 	  if (typeof value == "number") {
 		  // Only update those that are genuine numbers
-		  settings[field] = value
+		  settings[fields[idx]] = value
 	  }
   }
+
 
   //Convert to String  
   args = JSON.stringify(settings)
@@ -81,11 +82,11 @@ function fetch_settings(arg) {
   window.location.href = 'skp:fetch_settings@' + arg;
 }
 
+// For debugging
 function do_stuff() {
-	alert(settings["sheet_height"] = eval('12'))
-	alert(typeof settings.sheet_height)
-	alert(settings["sheet_height"] = eval(234566))
-	alert(typeof settings.sheet_height)
+	alert(typeof settings.padding)
+//	alert(settings["sheet_height"] = eval('12'))
+//	alert(settings["sheet_height"] = eval(234566))
 }
 
 
