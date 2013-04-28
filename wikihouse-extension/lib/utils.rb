@@ -2,7 +2,7 @@
 module WikihouseExtension
 
   # ------------------------------------------------------------------------------
-  # Utility Functions
+  # Utility Functions and Constants
   # ------------------------------------------------------------------------------
      
   # Path Utilities
@@ -26,9 +26,9 @@ module WikihouseExtension
     File.expand_path temp
   end
   
- 
   # Status Messages
-  def gen_status_msg(msg)
+  # Use self methods as they need to be called next
+  def self.gen_status_msg(msg)
     return [
       msg + " .",
       msg + " ..",
@@ -38,6 +38,29 @@ module WikihouseExtension
     ]
   end
   
+  WIKIHOUSE_DETECTION_STATUS = self.gen_status_msg "Detecting matching faces"
+  WIKIHOUSE_DXF_STATUS = self.gen_status_msg "Generating DXF output"
+  WIKIHOUSE_LAYOUT_STATUS = self.gen_status_msg "Nesting panels for layout"
+  WIKIHOUSE_PANEL_STATUS = self.gen_status_msg "Generating panel data"
+  WIKIHOUSE_SVG_STATUS = self.gen_status_msg "Generating SVG output"
+      
+  # Dummy Group
+  class WikiHouseDummyGroup 
+    attr_reader :name
+  
+    def initialize
+      @name = "Ungrouped Objects"
+    end
+  end
+  WIKIHOUSE_DUMMY_GROUP = WikiHouseDummyGroup.new
+
+  # UI Message Box codes 
+  REPLY_ABORT = 3
+  REPLY_CANCEL = 2
+  REPLY_NO = 7
+  REPLY_OK = 1
+  REPLY_RETRY = 4
+  REPLY_YES = 6
   
   def get_wikihouse_thumbnail(model, view, suffix)
     filename = File.join WIKIHOUSE_TEMP, "#{model.guid}-#{suffix}.png"
