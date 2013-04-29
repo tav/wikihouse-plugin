@@ -33,6 +33,7 @@ function recieve_wikihouse_settings(args) {
 	  
 	  document.getElementById("sheet_height").value = settings.sheet_height;
 	  document.getElementById("sheet_width").value = settings.sheet_width;
+	  document.getElementById("sheet_depth").value = settings.sheet_depth;
 	  document.getElementById("margin").value = settings.margin;
 	  document.getElementById("padding").value = settings.padding;
 	  document.getElementById("font_height").value = settings.font_height;
@@ -42,8 +43,8 @@ function recieve_wikihouse_settings(args) {
 function send_wikihouse_settings(mode) {
   
 	
-  var fields = new Array("sheet_height", "sheet_width", "margin",
-    "padding", "font_height");
+  var fields = new Array("sheet_height", "sheet_width", "sheet_depth", 
+		  "margin", "padding", "font_height");
   
   var idx, value, args;  
 

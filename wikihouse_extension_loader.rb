@@ -53,6 +53,7 @@ module WikihouseExtension
   # Set Wikihouse Pannel Dimentions
   wikihouse_sheet_height = 1200.mm
   wikihouse_sheet_width = 2400.mm
+  wikihouse_sheet_depth = 18.mm
   wihihouse_panel_padding = 25.mm / 2
   wikihouse_sheet_margin = 15.mm - wihihouse_panel_padding
   wikihouse_font_height = 30.mm
@@ -62,27 +63,34 @@ module WikihouseExtension
   #(Chris) Plan to eventually store all setting as a hash. 
   
   # Store the actual values as length objects (in inches)
-  @@wikihouse_settings = {
+  $wikihouse_settings = {
   "sheet_height" => wikihouse_sheet_height,
   "sheet_inner_height" => wikihouse_sheet_inner_height,
   "sheet_width"  => wikihouse_sheet_width, 
-  "sheet_inner_width"  => wikihouse_sheet_inner_width, 
+  "sheet_inner_width"  => wikihouse_sheet_inner_width,
+  "sheet_depth" => wikihouse_sheet_depth, 
   "padding"      => wihihouse_panel_padding,
   "margin"       => wikihouse_sheet_margin,
   "font_height"  => wikihouse_font_height,
   }
   
   # Store default values for recall
-  DEFAULT_SETTINGS = Hash[@@wikihouse_settings]
+  DEFAULT_SETTINGS = Hash[$wikihouse_settings]
   
-  # Get and set methods for wikihouse_settings (so they can be returned via 
-  # referencing the module e.g.  WikihouseExtension.settings   )
-  def self.settings
-    @@wikihouse_settings
-  end
-  def self.settings=(settings)
-    @@wikihouse_settings = settings
-  end
+# NEEDED IF SETTINGS IS A MODULE/CLASS VARIABLE (currently made it global)
+#   Note: module variable @@wikihouse_settings is accessable in WikihouseExtension namespace
+#   e.g. X = @@wikihouse_settings["sheet_height"] but not in any subclasses. 
+#   Therefore use get methods so they can be returned via referencing the module 
+#      e.g. settings = WikihouseExtension.settings
+#      e.g. X = settings["sheet_height"]
+#   Or all at once: 
+#      e.g. X = WikihouseExtension.settings["sheet_height"].
+#  def self.settings
+#    $wikihouse_settings
+#  end
+#  def self.settings=(settings)
+#    $wikihouse_settings = settings
+#  end
   
   # Define and Load the wikihouse Extension 
   WIKIHOUSE_EXTENSION = SketchupExtension.new "Wikihouse Plugin Development Version", "wikihouse-extension/wikihouse.rb"
