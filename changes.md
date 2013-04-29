@@ -1,4 +1,4 @@
-**Wikihouse 0.2 Dev**
+**Wikihouse Extension 0.2 Dev**
 
 New Features:
 
