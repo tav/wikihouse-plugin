@@ -1,4 +1,4 @@
-# Wikihouse Extension 0.2 Dev
+## Wikihouse Extension
 
 This is the WikiHouse extension for use Google SketchUp designed for the [Wikihouse](http://www.wikihouse.cc/) open source construction set. Using it,  
 you can:
