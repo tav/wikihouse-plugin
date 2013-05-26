@@ -15,3 +15,5 @@ List of Changes:
 *    All WebDialoge moved to  `WebDialog.rb`.
 *    Added a hash **$wikihouse_settings** as a global variale to store all variable configureation/settup data.
 *    Any code that is not currently functional is in `other.rb`. 
+*    Added methods to convert Ruby Hash and Array classes to JSON strings and vice versa. This provides a more flexible bridge between Ruby and JavaScript in the Web Dialogues.
+*    Added this change log file.
