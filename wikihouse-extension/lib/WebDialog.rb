@@ -70,7 +70,7 @@ module WikihouseExtension
 
   # Save Callback
   # -------------
-  def wikihouse_save_callback(dialog, params)
+  def wikihouse_save_callback(dialog, download_id)
     errmsg = "Couldn't find the #{WIKIHOUSE_TITLE} model data to save"
 
     # Exit if the save parameters weren't set.
@@ -127,7 +127,7 @@ module WikihouseExtension
 
   # Error Callback
   # --------------
-  def wikihouse_error_callback(dialog, params)
+  def wikihouse_error_callback(dialog, download_id)
     if not WIKIHOUSE_DOWNLOADS.key? download_id
       return
     end
@@ -156,11 +156,11 @@ module WikihouseExtension
     }
 
     dialog.add_action_callback("save") { |dialog, download_id|
-      wikihouse_save_callback(dialog, params)
+      wikihouse_save_callback(dialog, download_id)
     }
 
     dialog.add_action_callback("error") { |dialog, download_id|
-      wikihouse_error_callback(dialog, params)
+      wikihouse_error_callback(dialog, download_id)
     }
 
     # Set the dialog's url and display it.
