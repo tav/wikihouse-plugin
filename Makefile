@@ -3,6 +3,9 @@
 assets=wikihouse-extension/wikihouse-assets/*
 libs=wikihouse-extension/lib/*
 
+plugin_dir_2013=${HOME}/Library/Application\ Support/SketchUp\ 2013/SketchUp/Plugins/
+plugin_dir_SU8=/Library/Application\ Support/Google\ SketchUp\ 8/SketchUp/plugins/
+
 # Store current git revision 
 git-rev=$(git rev-parse --short=8 HEAD) 
 
@@ -23,9 +26,16 @@ release: wikihouse_extension.rbz
 	s3put ${wikihouse_bucket}wikihouse_extension-$git-rev.rbz wikihouse_extension.rbz 
 	s3put ${wikihouse_bucket}wikihouse_extension.rbz wikihouse_extension.rbz 
 	
-install_mac: wikihouse_extension_loader.rb wikihouse-extension/wikihouse.rb $(assets) $(libs)
+install_mac_SU8: wikihouse_extension_loader.rb wikihouse-extension/wikihouse.rb $(assets) $(libs)
 	# Copying files to their locations 
-	cp -v wikihouse_extension_loader.rb /Library/Application\ Support/Google\ SketchUp\ 8/SketchUp/plugins/wikihouse_extension_loader.rb
-	cp -v wikihouse-extension/wikihouse.rb /Library/Application\ Support/Google\ SketchUp\ 8/SketchUp/plugins/wikihouse-extension/wikihouse.rb
-	cp -v $(assets) /Library/Application\ Support/Google\ SketchUp\ 8/SketchUp/plugins/wikihouse-extension/wikihouse-assets/
-	cp -v $(libs) /Library/Application\ Support/Google\ SketchUp\ 8/SketchUp/plugins/wikihouse-extension/lib/
+	cp -v wikihouse_extension_loader.rb $(plugin_dir_SU8)
+	cp -v wikihouse-extension/wikihouse.rb $(plugin_dir_SU8)wikihouse-extension/wikihouse.rb
+	cp -v $(assets) $(plugin_dir_SU8)wikihouse-extension/wikihouse-assets/
+	cp -v $(libs) $(plugin_dir_SU8)wikihouse-extension/lib/
+	
+install_mac_SU2013: wikihouse_extension_loader.rb wikihouse-extension/wikihouse.rb $(assets) $(libs)
+	# Copying files to their locations 
+	cp -v wikihouse_extension_loader.rb $(plugin_dir_2013)
+	cp -v wikihouse-extension/wikihouse.rb $(plugin_dir_2013)wikihouse-extension/
+	cp -v $(assets) $(plugin_dir_2013)/wikihouse-extension/wikihouse-assets/
+	cp -v $(libs) $(plugin_dir_2013)/wikihouse-extension/lib/
