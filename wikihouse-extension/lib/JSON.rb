@@ -7,11 +7,13 @@
 
 module WikihouseExtension
   
-  module JSON
+  class JSON
   
-    module_function() # Allows Methods to be callable from module 
+    # Redefined JSON to a class instead of a module as this seems to through 
+    # a load error otherwise (things run fine though).
+#    module_function() # Allows Methods to be callable from module 
     
-    def from_json(json_string)
+    def self.from_json(json_string)
       # split at every even number of unescaped quotes; if it's not a string then replace : and null
       ruby_string = json_string.split(/(\"(?:.*?[^\\])*?\")/).
         collect{|s|
@@ -24,7 +26,7 @@ module WikihouseExtension
       {}
     end
   
-    def to_json(obj)
+    def self.to_json(obj)
       json_classes = [String, Symbol, Fixnum, Float, Length, Array, Hash, TrueClass, FalseClass, NilClass]
       # remove non-JSON objects
       check_value = nil
