@@ -158,6 +158,7 @@ module WikihouseExtension # Top Level Namespace
           loop_count += 1
   
           panel_data = panels[idx]
+          
           if not panel_data
             break
           end
@@ -539,7 +540,7 @@ module WikihouseExtension # Top Level Namespace
       intersections = []
       outer_loop = true
   
-      # Go through the various loops calculating centroids and intersection points
+      # Go through the various loops calculating centroids, face area, and intersection points
       # of potential curves.
       loops.each do |loop|
         idx = 0
@@ -698,15 +699,18 @@ module WikihouseExtension # Top Level Namespace
       end
   
       # Find the centroid.
+      # uses the first area and centoid coordinates as these should be for the outer loop.
+      # Then subtracts those of any inner loops. 
       @shell_area = surface_area = areas.shift
       topx = surface_area * cxs.shift
       topy = surface_area * cys.shift
-      for i in 0...areas.length
+      for i in 0...areas.length # Run through rest of areas, subtracting thier centroids * areas
         area = areas[i]
         topx -= area * cxs[i]
         topy -= area * cys[i]
         surface_area -= area
       end
+      # Final centorid 
       cx = topx / surface_area
       cy = topy / surface_area
       centroid = transform * [cx, cy, 0]
@@ -1197,6 +1201,7 @@ module WikihouseExtension # Top Level Namespace
       loader = $wikloader
     else
       loader = WikiHouseEntities.new entities, root, dimensions
+      $wikloader = loader
       if WIKIHOUSE_SHORT_CIRCUIT
         $wikloader = loader
       end
