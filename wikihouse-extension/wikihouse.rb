@@ -307,7 +307,7 @@ module WikihouseExtension # Top Level Namespace
                     if match
                       break
                     end
-                  end
+                  end # While 1  
                   if match
                     break
                   end
@@ -319,7 +319,7 @@ module WikihouseExtension # Top Level Namespace
               if match
                 break
               end
-            end
+            end # placed_o.each
           end
   
           if match
@@ -1005,7 +1005,7 @@ module WikihouseExtension # Top Level Namespace
         face1 = faces.pop
         area1 = face1.area transform
         # Ignore small faces.
-        if area1 < 5  # (Chris) This may be why the small C shaped parts in Joins are being ignored. 
+        if area1 < 2  # (Chris) This may be why the small C shaped parts in Joins are being ignored. 
           next
         end
         idx = -1
