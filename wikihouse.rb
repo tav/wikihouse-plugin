@@ -1771,7 +1771,7 @@ end
 def wikihouse_process_upload(dialog, model, model_path)
 
   if File.size(model_path) > 12582912
-    reply = UI.messagebox "The model file is larger than 12MB. Would you like to purge unused objects, materials and styles?", MB_OKCANCEL
+    reply = UI.messagebox "The model file is larger than 12MB. Would you like to purge unused layers, objects, materials and styles?", MB_OKCANCEL
     if reply == REPLY_OK
       model.layers.purge_unused
       model.styles.purge_unused
